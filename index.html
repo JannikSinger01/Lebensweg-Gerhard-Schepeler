@@ -1,306 +1,381 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Anchor, MapPin, Cross, User, ArrowRight, ArrowLeft, 
-  BookOpen, Info, Play, Pause, RefreshCw 
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
 
-// ==========================================
-// 1. HIER DATEN EINFÜGEN
-// ==========================================
-// Fülle diese Liste mit deinen Inhalten.
-// Du kannst so viele Stationen hinzufügen, wie du möchtest.
+// -------------------------------------------------------------
+// KONFIGURATION & DATEN
+// -------------------------------------------------------------
 
-const APP_CONFIG = {
-  mainTitle: "Titel der Lebensreise",
-  subTitle: "Untertitel der Biografie",
-  authorRef: "Historische Aufarbeitung: Dein Name / Thorsten Heese"
+const LOCATIONS = {
+  westAfrica: { lat: 5.5, lon: -0.2, label: "Goldküste" },
+  osnabrueck: { lat: 52.27, lon: 8.05, label: "Osnabrück" }
 };
 
-const STORY_DATA = [
-  {
-    id: 1,
-    year: "JAHR",
-    title: "Erste Station / Herkunft",
-    location: "Ort (z.B. Suriname)",
-    // Der Haupttext, der die Geschichte erzählt
-    text: "Hier den erzählenden Text für den ersten Lebensabschnitt einfügen. Beschreibe die Situation, die Umgebung und die Gefühle.",
-    // Der wissenschaftliche Hintergrund (wird optional eingeblendet)
-    scientificContext: "Hier den historischen Faktencheck oder Hintergrundinformationen einfügen (z.B. Handelsrouten, Statistiken).",
-    // Wähle ein Icon: 'anchor', 'map', 'cross', 'user' (wird unten in der Logik zugeordnet)
-    iconType: 'anchor',
-    color: 'bg-amber-100'
-  },
-  {
-    id: 2,
-    year: "JAHR",
-    title: "Zweite Station",
-    location: "Ort (z.B. Osnabrück)",
-    text: "Hier den Text für den zweiten Abschnitt einfügen...",
-    scientificContext: "Wissenschaftlicher Kontext für Station 2...",
-    iconType: 'map',
-    color: 'bg-stone-200'
-  },
-  {
-    id: 3,
-    year: "JAHR",
-    title: "Dritte Station",
-    location: "Ort",
-    text: "Hier den Text für den dritten Abschnitt einfügen...",
-    scientificContext: "Wissenschaftlicher Kontext für Station 3...",
-    iconType: 'cross',
-    color: 'bg-blue-50'
-  },
-  {
-    id: 4,
-    year: "JAHR",
-    title: "Vierte Station",
-    location: "Ort",
-    text: "Hier den Text für den vierten Abschnitt einfügen...",
-    scientificContext: "Wissenschaftlicher Kontext für Station 4...",
-    iconType: 'user',
-    color: 'bg-emerald-50'
-  }
-];
-
-// ==========================================
-// 2. APP LOGIK & DESIGN (Vibe-Coding)
-// ==========================================
-
-// Helfer für Icons
-const IconMap = ({ type, className }) => {
-  switch (type) {
-    case 'anchor': return <Anchor className={className} />;
-    case 'map': return <MapPin className={className} />;
-    case 'cross': return <Cross className={className} />;
-    case 'user': return <User className={className} />;
-    default: return <MapPin className={className} />;
-  }
+// Startpunkt für Zoom (Westafrika)
+const ZOOM_TARGET = {
+  ...LOCATIONS.westAfrica,
+  distance: 3.0
 };
 
-// Komponente: Die visuelle Karte / Fortschrittsanzeige
-const JourneyMap = ({ currentStep, totalSteps, data }) => {
-  return (
-    <div className="h-full w-full bg-stone-100 rounded-2xl p-8 relative overflow-hidden shadow-inner border border-stone-200">
-      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[radial-gradient(#a8a29e_1px,transparent_1px)] [background-size:16px_16px]"></div>
-      
-      <h3 className="text-stone-400 font-serif text-sm uppercase tracking-widest mb-8 text-center">Reiseroute</h3>
-      
-      <div className="relative flex flex-col items-center justify-between h-[80%]">
-        {/* Verbindungslinie Hintergrund */}
-        <div className="absolute left-1/2 top-2 bottom-2 w-1 bg-stone-300 -translate-x-1/2 rounded"></div>
-        
-        {/* Verbindungslinie Fortschritt (animiert) */}
-        <div 
-          className="absolute left-1/2 top-2 w-1 bg-stone-800 -translate-x-1/2 rounded transition-all duration-700 ease-in-out"
-          style={{ height: `${(currentStep / (totalSteps - 1)) * 100}%` }}
-        ></div>
-
-        {/* Stationen Punkte */}
-        {data.map((station, index) => {
-          const isActive = index === currentStep;
-          const isPast = index < currentStep;
-          
-          return (
-            <div key={station.id} className="relative z-10 flex items-center justify-center w-full">
-               {/* Label Links (für aktive/vergangene) */}
-               <div className={`absolute right-[60%] text-right transition-all duration-500 ${isActive ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}>
-                 <span className="font-serif font-bold text-stone-800 text-lg block">{station.location}</span>
-                 <span className="text-xs text-stone-500">{station.year}</span>
-               </div>
-
-               {/* Der Punkt */}
-               <div 
-                 className={`
-                   w-8 h-8 rounded-full border-4 transition-all duration-500 flex items-center justify-center
-                   ${isActive ? 'bg-stone-800 border-stone-200 scale-125 shadow-lg' : isPast ? 'bg-stone-800 border-stone-800' : 'bg-white border-stone-300'}
-                 `}
-               >
-                 {isPast && <div className="w-2 h-2 bg-white rounded-full" />}
-               </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+const THEME = {
+  background: '#0f172a', // Slate 900
+  ocean: '#0f172a',      // Dunkler Hintergrund
+  globeGrid: '#334155',  // Slate 700 (Gitterlinien)
+  equator: '#94a3b8',    // Hellerer Äquator
+  pathColor: '#f59e0b',  // Amber 500
+  markerStart: '#f59e0b', 
+  markerEnd: '#cbd5e1',  // Slate 300
 };
 
-// Komponente: Der Inhalt der aktuellen Station
-const StationContent = ({ data, onNext, onPrev, isFirst, isLast }) => {
-  const [showContext, setShowContext] = useState(false);
+// -------------------------------------------------------------
+// HELPER: MATHEMATIK & TEXTUREN
+// -------------------------------------------------------------
 
-  // Reset Context wenn sich die Station ändert
-  useEffect(() => { setShowContext(false); }, [data]);
-
-  return (
-    <div className="flex flex-col h-full justify-center max-w-xl mx-auto animate-fadeIn">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <span className="px-3 py-1 bg-stone-200 text-stone-600 rounded text-sm font-bold font-serif">
-          {data.year}
-        </span>
-        <div className={`p-2 rounded-full ${data.color} text-stone-800`}>
-           <IconMap type={data.iconType} className="w-4 h-4" />
-        </div>
-      </div>
-
-      {/* Title */}
-      <h2 className="text-4xl md:text-5xl font-serif font-bold text-stone-900 mb-6 leading-tight">
-        {data.title}
-      </h2>
-
-      {/* Main Text */}
-      <div className="prose prose-stone prose-lg text-stone-600 mb-8 leading-relaxed">
-        <p>{data.text}</p>
-      </div>
-
-      {/* Context Toggle */}
-      <div className="mb-8">
-        <button 
-          onClick={() => setShowContext(!showContext)}
-          className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-stone-400 hover:text-stone-800 transition-colors"
-        >
-          <Info size={16} />
-          {showContext ? 'Kontext schließen' : 'Historischen Kontext öffnen'}
-        </button>
-        
-        <div className={`grid transition-all duration-300 ease-in-out ${showContext ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
-          <div className="overflow-hidden">
-            <div className="bg-stone-100 border-l-4 border-stone-400 p-4 rounded text-sm text-stone-700 italic">
-              {data.scientificContext}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Buttons */}
-      <div className="flex items-center gap-4 mt-auto pt-8 border-t border-stone-100">
-        <button 
-          onClick={onPrev}
-          disabled={isFirst}
-          className={`p-3 rounded-full border border-stone-300 transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed' : 'hover:bg-stone-100 text-stone-700'}`}
-        >
-          <ArrowLeft size={20} />
-        </button>
-        
-        <button 
-          onClick={onNext}
-          className="flex-1 bg-stone-900 text-white py-3 px-6 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-stone-800 transition-transform active:scale-95 shadow-md"
-        >
-          {isLast ? 'Reise abschließen' : 'Reise fortsetzen'}
-          {!isLast && <ArrowRight size={20} />}
-          {isLast && <RefreshCw size={20} />}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-export default function App() {
-  const [currentStationIndex, setCurrentStationIndex] = useState(0);
-  const [hasStarted, setHasStarted] = useState(false);
-
-  const nextStation = () => {
-    if (currentStationIndex < STORY_DATA.length - 1) {
-      setCurrentStationIndex(prev => prev + 1);
-    } else {
-      // Reset or Finish Screen
-      setCurrentStationIndex(0);
-      setHasStarted(false);
-    }
-  };
-
-  const prevStation = () => {
-    if (currentStationIndex > 0) {
-      setCurrentStationIndex(prev => prev - 1);
-    }
-  };
-
-  // Intro Screen
-  if (!hasStarted) {
-    return (
-      <div className="min-h-screen bg-[#fdfbf7] flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-stone-100 via-[#fdfbf7] to-[#fdfbf7] -z-10"></div>
-        
-        <div className="max-w-2xl animate-fadeInUp">
-          <h1 className="text-5xl md:text-7xl font-serif font-bold text-stone-900 mb-4">
-            {APP_CONFIG.mainTitle}
-          </h1>
-          <p className="text-xl text-stone-500 mb-8 font-serif italic">
-            {APP_CONFIG.subTitle}
-          </p>
-          
-          <button 
-            onClick={() => setHasStarted(true)}
-            className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all duration-200 bg-stone-900 font-sans rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-900 hover:bg-stone-800 hover:shadow-xl"
-          >
-            <span className="mr-2">Reise beginnen</span>
-            <Play size={20} className="group-hover:translate-x-1 transition-transform" />
-          </button>
-          
-          <div className="mt-12 text-sm text-stone-400">
-            {APP_CONFIG.authorRef}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Main App Interface
-  return (
-    <div className="min-h-screen bg-[#fdfbf7] text-stone-900 font-sans p-4 md:p-8 flex items-center justify-center">
-      
-      <div className="w-full max-w-6xl h-[85vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-stone-100">
-        
-        {/* Linke Seite (oder Oben auf Mobile): Inhalt */}
-        <div className="flex-1 p-8 md:p-12 overflow-y-auto order-2 md:order-1 relative">
-           <StationContent 
-             data={STORY_DATA[currentStationIndex]} 
-             onNext={nextStation}
-             onPrev={prevStation}
-             isFirst={currentStationIndex === 0}
-             isLast={currentStationIndex === STORY_DATA.length - 1}
-           />
-           <div className="absolute top-4 left-6 text-xs text-stone-300 font-bold tracking-widest pointer-events-none">
-             STATION {currentStationIndex + 1} / {STORY_DATA.length}
-           </div>
-        </div>
-
-        {/* Rechte Seite (oder Unten auf Mobile): Karte/Visualisierung */}
-        <div className="hidden md:block w-1/3 bg-stone-50 p-4 order-1 md:order-2 border-l border-stone-100">
-           <JourneyMap 
-             currentStep={currentStationIndex} 
-             totalSteps={STORY_DATA.length}
-             data={STORY_DATA}
-           />
-        </div>
-
-        {/* Mobile Progress Bar (statt Karte) */}
-        <div className="md:hidden w-full h-2 bg-stone-100 order-1">
-          <div 
-            className="h-full bg-stone-900 transition-all duration-300"
-            style={{ width: `${((currentStationIndex + 1) / STORY_DATA.length) * 100}%` }}
-          ></div>
-        </div>
-
-      </div>
-
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.6s ease-out forwards;
-        }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeInUp {
-          animation: fadeInUp 0.8s ease-out forwards;
-        }
-      `}</style>
-    </div>
-  );
+function latLongToVector3(lat, lon, radius) {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+  const x = -(radius * Math.sin(phi) * Math.cos(theta));
+  const z = (radius * Math.sin(phi) * Math.sin(theta));
+  const y = (radius * Math.cos(phi));
+  return new THREE.Vector3(x, y, z);
 }
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// HINWEIS: Die Funktion createMapTexture() wird nicht mehr benötigt, 
+// da wir nun ein echtes Bild laden. Ich lasse sie der Vollständigkeit halber 
+// im Code, falls du später doch wieder auf den abstrakten Look wechseln möchtest.
+// Erstellt eine saubere, abstrakte Gitter-Textur
+function createMapTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048; 
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+
+  // 1. Hintergrund (Ozean/Leere)
+  ctx.fillStyle = THEME.ocean;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Gitterlinien
+  ctx.strokeStyle = THEME.globeGrid;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.4;
+
+  // Längengrade
+  for (let x = 0; x <= canvas.width; x += canvas.width / 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  // Breitengrade
+  for (let y = 0; y <= canvas.height; y += canvas.height / 12) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  // Äquator (Hervorgehoben)
+  ctx.strokeStyle = THEME.equator;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height / 2);
+  ctx.lineTo(canvas.width, canvas.height / 2);
+  ctx.stroke();
+
+  return canvas;
+}
+
+// -------------------------------------------------------------
+// SHADER FÜR ATMOSPHÄRE (GLOW)
+// -------------------------------------------------------------
+const vertexShader = `
+varying vec3 vNormal;
+void main() {
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const fragmentShader = `
+varying vec3 vNormal;
+void main() {
+    float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 4.0);
+    gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
+}
+`;
+
+// -------------------------------------------------------------
+// HAUPTKOMPONENTE
+// -------------------------------------------------------------
+
+const App = () => {
+  const mountRef = useRef(null);
+  const [phase, setPhase] = useState('start');
+  const [showText, setShowText] = useState(false);
+
+  // Refs für Three.js
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const earthRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  
+  // Animation State
+  const progressRef = useRef(0);
+  const startPosRef = useRef(new THREE.Vector3(0, 5, 14));
+  const targetPosRef = useRef(new THREE.Vector3());
+
+  useEffect(() => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(THEME.background);
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.copy(startPosRef.current);
+    camera.lookAt(0,0,0);
+    
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // --- GLOBUS ---
+    const earthGroup = new THREE.Group();
+    scene.add(earthGroup);
+    earthRef.current = earthGroup;
+
+    // Textur laden (Upload)
+    const textureLoader = new THREE.TextureLoader();
+    // Hier wird der Dateiname des hochgeladenen Bildes verwendet
+    const mapTexture = textureLoader.load('Bild Erde für Globus.jpg');
+    
+    // Einstellungen für bessere Qualität
+    mapTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    // Wichtig für korrekte Farbdarstellung bei Fotos in neueren Three.js Versionen
+    mapTexture.colorSpace = THREE.SRGBColorSpace; 
+
+    const geometry = new THREE.SphereGeometry(3, 64, 64);
+    const material = new THREE.MeshPhongMaterial({
+      map: mapTexture,
+      bumpScale: 0.05,
+      specular: new THREE.Color(0x333333), // Etwas reduzierter Glanz für Realismus
+      shininess: 5,
+    });
+    const sphere = new THREE.Mesh(geometry, material);
+    earthGroup.add(sphere);
+
+    // Atmosphäre
+    const atmosphereGeo = new THREE.SphereGeometry(3.2, 64, 64);
+    const atmosphereMat = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      transparent: true
+    });
+    const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
+    scene.add(atmosphere);
+
+    // --- POIs & ROUTE ---
+    const radius = 3;
+    const vAfrica = latLongToVector3(LOCATIONS.westAfrica.lat, LOCATIONS.westAfrica.lon, radius);
+    const vOsna = latLongToVector3(LOCATIONS.osnabrueck.lat, LOCATIONS.osnabrueck.lon, radius);
+
+    const addMarker = (position, color, isPulse = false) => {
+        const mGeo = new THREE.SphereGeometry(0.06, 16, 16);
+        const mMat = new THREE.MeshBasicMaterial({ color: color });
+        const mesh = new THREE.Mesh(mGeo, mMat);
+        mesh.position.copy(position);
+        earthGroup.add(mesh);
+        
+        if(isPulse) {
+            const rGeo = new THREE.RingGeometry(0.08, 0.12, 32);
+            const rMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+            const ring = new THREE.Mesh(rGeo, rMat);
+            ring.position.copy(position);
+            ring.lookAt(new THREE.Vector3(0,0,0));
+            mesh.userData = { ring };
+            earthGroup.add(ring);
+            return { mesh, ring };
+        }
+        return { mesh };
+    };
+
+    const markerAfrica = addMarker(vAfrica, THEME.markerStart, true);
+    addMarker(vOsna, THEME.markerEnd, false);
+
+    // Verbindungslinie
+    const midPoint = vAfrica.clone().add(vOsna).normalize().multiplyScalar(radius * 1.3);
+    const curve = new THREE.QuadraticBezierCurve3(vAfrica, midPoint, vOsna);
+    const points = curve.getPoints(50);
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMat = new THREE.LineBasicMaterial({ 
+        color: THEME.pathColor, 
+        transparent: true, 
+        opacity: 0.6,
+        linewidth: 2 
+    });
+    const pathLine = new THREE.Line(lineGeo, lineMat);
+    earthGroup.add(pathLine);
+
+    // BELEUCHTUNG
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    sunLight.position.set(10, 5, 10);
+    scene.add(sunLight);
+    
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    scene.add(ambientLight);
+
+    // Ziel für Kamera
+    const targetVec = vAfrica.clone().normalize().multiplyScalar(ZOOM_TARGET.distance);
+    targetPosRef.current = targetVec;
+
+    // --- ANIMATION LOOP ---
+    const animate = () => {
+      animationFrameRef.current = requestAnimationFrame(animate);
+      
+      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        
+        // 1. Rotation (nur im Start-Zustand)
+        if (phase === 'start') {
+          earthGroup.rotation.y += 0.0008; 
+        }
+
+        // 2. Zoom Animation (Langsam)
+        if (phase === 'zooming') {
+          progressRef.current += 0.0025; 
+
+          if (progressRef.current >= 1) {
+            progressRef.current = 1;
+            setPhase('content');
+            setShowText(true);
+          }
+
+          const t = easeInOutCubic(progressRef.current);
+          camera.position.lerpVectors(startPosRef.current, targetPosRef.current, t);
+          camera.lookAt(new THREE.Vector3(0, 0, 0));
+        }
+        
+        // 3. Pulse
+        if (markerAfrica.ring) {
+            const s = 1 + Math.sin(Date.now() * 0.004) * 0.3;
+            markerAfrica.ring.scale.set(s, s, s);
+        }
+
+        renderer.render(scene, camera);
+      }
+    };
+
+    animate();
+
+    const handleResize = () => {
+      if (cameraRef.current && rendererRef.current) {
+        cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+        cameraRef.current.updateProjectionMatrix();
+        rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameRef.current);
+      if (mountRef.current && rendererRef.current) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+      }
+    };
+  }, [phase]);
+
+  const handleStart = () => {
+    if (earthRef.current) {
+        earthRef.current.rotation.y = 0; 
+    }
+    setPhase('zooming');
+  };
+
+  return (
+    <div className="relative w-full h-screen overflow-hidden bg-slate-900 font-serif text-slate-100">
+      
+      <div ref={mountRef} className="absolute inset-0 z-0" />
+
+      <div 
+        className={`absolute inset-0 z-10 flex flex-col items-center justify-center transition-opacity duration-1000 ${
+          phase === 'start' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="text-center p-8 max-w-2xl bg-slate-900/50 backdrop-blur-sm rounded-xl border border-white/5 shadow-2xl">
+          <p className="text-amber-500 tracking-widest text-sm uppercase mb-3 font-sans font-bold">
+            Biografische Kartierung
+          </p>
+          <h1 className="text-4xl md:text-6xl font-bold mb-4 leading-tight">
+            Vom Golf von Guinea<br/>nach Osnabrück
+          </h1>
+          <p className="text-slate-300 text-lg mb-8 font-sans font-light">
+            Der Lebensweg von Christian Gerhard Schepeler.
+          </p>
+          <button 
+            onClick={handleStart}
+            className="group relative px-8 py-3 bg-amber-600 text-white font-sans font-medium rounded-full hover:bg-amber-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/20"
+          >
+            Route verfolgen
+          </button>
+        </div>
+        
+        <div className="absolute bottom-10 left-10 hidden md:block text-xs font-sans text-slate-500 space-y-1">
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Start: Westafrika (~1770)</div>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Ziel: Osnabrück (1833)</div>
+        </div>
+      </div>
+
+      <div 
+        className={`absolute z-20 top-0 left-0 h-full w-full md:w-5/12 p-8 md:p-12 flex flex-col justify-center bg-slate-900/90 backdrop-blur-md border-r border-white/10 transition-transform duration-1000 ease-out ${
+          showText ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="overflow-y-auto h-full pr-4 custom-scrollbar">
+          <span className="text-amber-500 font-bold tracking-widest text-xs uppercase mb-2 block">
+            Station 1
+          </span>
+          <h2 className="text-3xl font-bold mb-6 text-white border-b border-slate-700 pb-4">
+            Die Goldküste
+          </h2>
+          
+          <div className="space-y-6 text-slate-300 font-light leading-relaxed text-lg">
+            <p>
+              Hier beginnt die Rekonstruktion eines Lebens, das durch koloniale Gewalt entwurzelt wurde. 
+              Die "Goldküste" (heutiges Ghana) war im 18. Jahrhundert ein zentraler Knotenpunkt des transatlantischen Sklavenhandels.
+            </p>
+            <p className="text-sm border-l-2 border-amber-500 pl-4 italic text-slate-400 my-6">
+              "Es ist wichtig, nicht nur die Ankunft in Osnabrück zu betrachten, sondern den Ort des Ursprungs visuell und gedanklich als eigenständigen Raum zu würdigen."
+            </p>
+            <p>
+              [Platzhalter für wissenschaftliche Einordnung: Wie gelangte Schepeler in das System der Sklaverei? Welche Rolle spielten europäische Handelskompanien vor Ort?]
+            </p>
+          </div>
+
+          <div className="mt-12 flex gap-4">
+             <button className="px-6 py-2 border border-slate-600 rounded hover:bg-slate-800 text-sm transition-colors">
+               Quellen anzeigen
+             </button>
+             <button className="px-6 py-2 bg-slate-100 text-slate-900 rounded hover:bg-white text-sm font-medium transition-colors">
+               Nächste Station: Osnabrück
+             </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+export default App;
