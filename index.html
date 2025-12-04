@@ -1,379 +1,290 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Stars, Html, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import { Activity, Globe, Info, Navigation, Layers, Scan } from 'lucide-react';
 
-// -------------------------------------------------------------
-// KONFIGURATION & DATEN
-// -------------------------------------------------------------
+// --- Komponenten ---
 
-const LOCATIONS = {
-  westAfrica: { lat: 5.5, lon: -0.2, label: "Goldküste" },
-  osnabrueck: { lat: 52.27, lon: 8.05, label: "Osnabrück" }
-};
-
-// Startpunkt für Zoom (Westafrika)
-const ZOOM_TARGET = {
-  ...LOCATIONS.westAfrica,
-  distance: 3.0
-};
-
-const THEME = {
-  background: '#0f172a', // Slate 900
-  ocean: '#0f172a',      // Dunkler Hintergrund
-  globeGrid: '#334155',  // Slate 700 (Gitterlinien)
-  equator: '#94a3b8',    // Hellerer Äquator
-  pathColor: '#f59e0b',  // Amber 500
-  markerStart: '#f59e0b', 
-  markerEnd: '#cbd5e1',  // Slate 300
-};
-
-// -------------------------------------------------------------
-// HELPER: MATHEMATIK & TEXTUREN
-// -------------------------------------------------------------
-
-function latLongToVector3(lat, lon, radius) {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
-  const x = -(radius * Math.sin(phi) * Math.cos(theta));
-  const z = (radius * Math.sin(phi) * Math.sin(theta));
-  const y = (radius * Math.cos(phi));
-  return new THREE.Vector3(x, y, z);
-}
-
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-// HINWEIS: Die Funktion createMapTexture() wird nicht mehr benötigt, 
-// da wir nun ein echtes Bild laden. Ich lasse sie der Vollständigkeit halber 
-// im Code, falls du später doch wieder auf den abstrakten Look wechseln möchtest.
-// Erstellt eine saubere, abstrakte Gitter-Textur
-function createMapTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 2048; 
-  canvas.height = 1024;
-  const ctx = canvas.getContext('2d');
-
-  // 1. Hintergrund (Ozean/Leere)
-  ctx.fillStyle = THEME.ocean;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // 2. Gitterlinien
-  ctx.strokeStyle = THEME.globeGrid;
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.4;
-
-  // Längengrade
-  for (let x = 0; x <= canvas.width; x += canvas.width / 24) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-
-  // Breitengrade
-  for (let y = 0; y <= canvas.height; y += canvas.height / 12) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
-  }
-
-  // Äquator (Hervorgehoben)
-  ctx.strokeStyle = THEME.equator;
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(0, canvas.height / 2);
-  ctx.lineTo(canvas.width, canvas.height / 2);
-  ctx.stroke();
-
-  return canvas;
-}
-
-// -------------------------------------------------------------
-// SHADER FÜR ATMOSPHÄRE (GLOW)
-// -------------------------------------------------------------
-const vertexShader = `
-varying vec3 vNormal;
-void main() {
-    vNormal = normalize(normalMatrix * normal);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const fragmentShader = `
-varying vec3 vNormal;
-void main() {
-    float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 4.0);
-    gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
-}
-`;
-
-// -------------------------------------------------------------
-// HAUPTKOMPONENTE
-// -------------------------------------------------------------
-
-const App = () => {
-  const mountRef = useRef(null);
-  const [phase, setPhase] = useState('start');
-  const [showText, setShowText] = useState(false);
-
-  // Refs für Three.js
-  const sceneRef = useRef(null);
-  const cameraRef = useRef(null);
-  const rendererRef = useRef(null);
-  const earthRef = useRef(null);
-  const animationFrameRef = useRef(null);
+// Eine stilisierte Erde ohne externe Texturen (Prozedural)
+const EarthModel = ({ autoRotate = true }) => {
+  const earthRef = useRef();
+  const cloudsRef = useRef();
   
-  // Animation State
-  const progressRef = useRef(0);
-  const startPosRef = useRef(new THREE.Vector3(0, 5, 14));
-  const targetPosRef = useRef(new THREE.Vector3());
-
-  useEffect(() => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(THEME.background);
-
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.copy(startPosRef.current);
-    camera.lookAt(0,0,0);
-    
-    sceneRef.current = scene;
-    cameraRef.current = camera;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    mountRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    // --- GLOBUS ---
-    const earthGroup = new THREE.Group();
-    scene.add(earthGroup);
-    earthRef.current = earthGroup;
-
-    // Textur laden (Upload)
-    const textureLoader = new THREE.TextureLoader();
-    // Hier wird der Dateiname des hochgeladenen Bildes verwendet
-    const mapTexture = textureLoader.load('Bild Erde für Globus.jpg');
-    
-    // Einstellungen für bessere Qualität
-    mapTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    // Wichtig für korrekte Farbdarstellung bei Fotos in neueren Three.js Versionen
-    mapTexture.colorSpace = THREE.SRGBColorSpace; 
-
-    const geometry = new THREE.SphereGeometry(3, 64, 64);
-    const material = new THREE.MeshPhongMaterial({
-      map: mapTexture,
-      bumpScale: 0.05,
-      specular: new THREE.Color(0x333333), // Etwas reduzierter Glanz für Realismus
-      shininess: 5,
-    });
-    const sphere = new THREE.Mesh(geometry, material);
-    earthGroup.add(sphere);
-
-    // Atmosphäre
-    const atmosphereGeo = new THREE.SphereGeometry(3.2, 64, 64);
-    const atmosphereMat = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      blending: THREE.AdditiveBlending,
-      side: THREE.BackSide,
-      transparent: true
-    });
-    const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
-    scene.add(atmosphere);
-
-    // --- POIs & ROUTE ---
-    const radius = 3;
-    const vAfrica = latLongToVector3(LOCATIONS.westAfrica.lat, LOCATIONS.westAfrica.lon, radius);
-    const vOsna = latLongToVector3(LOCATIONS.osnabrueck.lat, LOCATIONS.osnabrueck.lon, radius);
-
-    const addMarker = (position, color, isPulse = false) => {
-        const mGeo = new THREE.SphereGeometry(0.06, 16, 16);
-        const mMat = new THREE.MeshBasicMaterial({ color: color });
-        const mesh = new THREE.Mesh(mGeo, mMat);
-        mesh.position.copy(position);
-        earthGroup.add(mesh);
-        
-        if(isPulse) {
-            const rGeo = new THREE.RingGeometry(0.08, 0.12, 32);
-            const rMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
-            const ring = new THREE.Mesh(rGeo, rMat);
-            ring.position.copy(position);
-            ring.lookAt(new THREE.Vector3(0,0,0));
-            mesh.userData = { ring };
-            earthGroup.add(ring);
-            return { mesh, ring };
-        }
-        return { mesh };
-    };
-
-    const markerAfrica = addMarker(vAfrica, THEME.markerStart, true);
-    addMarker(vOsna, THEME.markerEnd, false);
-
-    // Verbindungslinie
-    const midPoint = vAfrica.clone().add(vOsna).normalize().multiplyScalar(radius * 1.3);
-    const curve = new THREE.QuadraticBezierCurve3(vAfrica, midPoint, vOsna);
-    const points = curve.getPoints(50);
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMat = new THREE.LineBasicMaterial({ 
-        color: THEME.pathColor, 
-        transparent: true, 
-        opacity: 0.6,
-        linewidth: 2 
-    });
-    const pathLine = new THREE.Line(lineGeo, lineMat);
-    earthGroup.add(pathLine);
-
-    // BELEUCHTUNG
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    sunLight.position.set(10, 5, 10);
-    scene.add(sunLight);
-    
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
-    scene.add(ambientLight);
-
-    // Ziel für Kamera
-    const targetVec = vAfrica.clone().normalize().multiplyScalar(ZOOM_TARGET.distance);
-    targetPosRef.current = targetVec;
-
-    // --- ANIMATION LOOP ---
-    const animate = () => {
-      animationFrameRef.current = requestAnimationFrame(animate);
-      
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        
-        // 1. Rotation (nur im Start-Zustand)
-        if (phase === 'start') {
-          earthGroup.rotation.y += 0.0008; 
-        }
-
-        // 2. Zoom Animation (Langsam)
-        if (phase === 'zooming') {
-          progressRef.current += 0.0025; 
-
-          if (progressRef.current >= 1) {
-            progressRef.current = 1;
-            setPhase('content');
-            setShowText(true);
-          }
-
-          const t = easeInOutCubic(progressRef.current);
-          camera.position.lerpVectors(startPosRef.current, targetPosRef.current, t);
-          camera.lookAt(new THREE.Vector3(0, 0, 0));
-        }
-        
-        // 3. Pulse
-        if (markerAfrica.ring) {
-            const s = 1 + Math.sin(Date.now() * 0.004) * 0.3;
-            markerAfrica.ring.scale.set(s, s, s);
-        }
-
-        renderer.render(scene, camera);
-      }
-    };
-
-    animate();
-
-    const handleResize = () => {
-      if (cameraRef.current && rendererRef.current) {
-        cameraRef.current.aspect = window.innerWidth / window.innerHeight;
-        cameraRef.current.updateProjectionMatrix();
-        rendererRef.current.setSize(window.innerWidth, window.innerHeight);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameRef.current);
-      if (mountRef.current && rendererRef.current) {
-        mountRef.current.removeChild(rendererRef.current.domElement);
-      }
-    };
-  }, [phase]);
-
-  const handleStart = () => {
-    if (earthRef.current) {
-        earthRef.current.rotation.y = 0; 
+  useFrame(({ clock }) => {
+    if (autoRotate && earthRef.current) {
+      earthRef.current.rotation.y = clock.getElapsedTime() * 0.1;
     }
-    setPhase('zooming');
-  };
+    if (autoRotate && cloudsRef.current) {
+      cloudsRef.current.rotation.y = clock.getElapsedTime() * 0.15; // Wolken drehen sich schneller
+    }
+  });
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-slate-900 font-serif text-slate-100">
-      
-      <div ref={mountRef} className="absolute inset-0 z-0" />
+    <group>
+      {/* Hauptkugel (Ozean/Basis) */}
+      <mesh ref={earthRef}>
+        <sphereGeometry args={[2, 64, 64]} />
+        <meshPhysicalMaterial 
+          color="#1E3A8A" // Dunkelblau
+          roughness={0.4}
+          metalness={0.6}
+          emissive="#172554"
+          emissiveIntensity={0.2}
+          transparent={true}
+          opacity={0.9}
+        />
+      </mesh>
 
-      <div 
-        className={`absolute inset-0 z-10 flex flex-col items-center justify-center transition-opacity duration-1000 ${
-          phase === 'start' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="text-center p-8 max-w-2xl bg-slate-900/50 backdrop-blur-sm rounded-xl border border-white/5 shadow-2xl">
-          <p className="text-amber-500 tracking-widest text-sm uppercase mb-3 font-sans font-bold">
-            Biografische Kartierung
-          </p>
-          <h1 className="text-4xl md:text-6xl font-bold mb-4 leading-tight">
-            Vom Golf von Guinea<br/>nach Osnabrück
-          </h1>
-          <p className="text-slate-300 text-lg mb-8 font-sans font-light">
-            Der Lebensweg von Christian Gerhard Schepeler.
-          </p>
-          <button 
-            onClick={handleStart}
-            className="group relative px-8 py-3 bg-amber-600 text-white font-sans font-medium rounded-full hover:bg-amber-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/20"
-          >
-            Route verfolgen
-          </button>
+      {/* Wireframe Overlay (Gitternetzlinien für den Tech-Look) */}
+      <mesh>
+        <sphereGeometry args={[2.01, 32, 32]} />
+        <meshBasicMaterial 
+          color="#60A5FA" 
+          wireframe={true} 
+          transparent={true} 
+          opacity={0.15} 
+        />
+      </mesh>
+
+      {/* Atmosphären-Glow (Hinter der Erde) */}
+      <mesh scale={[2.2, 2.2, 2.2]}>
+        <sphereGeometry args={[1, 64, 64]} />
+        <meshBasicMaterial 
+          color="#3B82F6" 
+          transparent 
+          opacity={0.1} 
+          side={THREE.BackSide} 
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// Satelliten, die um die Erde kreisen
+const Satellite = ({ radius, speed, color, size, offset }) => {
+  const ref = useRef();
+  
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime() * speed + offset;
+    ref.current.position.x = Math.sin(t) * radius;
+    ref.current.position.z = Math.cos(t) * radius;
+    // Leichte Neigung
+    ref.current.position.y = Math.sin(t * 0.5) * (radius * 0.3);
+  });
+
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[size, 16, 16]} />
+      <meshBasicMaterial color={color} />
+      <Html distanceFactor={15}>
+        <div className="bg-black/80 text-cyan-400 text-[10px] px-1 rounded border border-cyan-500/30 whitespace-nowrap">
+          SAT-LINK
+        </div>
+      </Html>
+    </mesh>
+  );
+};
+
+// Ein schwebender Marker auf der Oberfläche
+const LocationMarker = ({ position, label }) => {
+  return (
+    <group position={position}>
+      <mesh>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshBasicMaterial color="#EF4444" />
+      </mesh>
+      <Html distanceFactor={10}>
+        <div className="flex flex-col items-center group cursor-pointer">
+          <div className="w-2 h-8 bg-gradient-to-t from-red-500/50 to-transparent"></div>
+          <div className="bg-slate-900/90 text-white text-xs px-3 py-1 rounded border-l-2 border-red-500 shadow-lg transform transition-all group-hover:scale-110">
+            {label}
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+// Datenringe um die Erde
+const DataRings = () => {
+  return (
+    <group rotation={[Math.PI / 3, 0, 0]}>
+      <mesh>
+        <torusGeometry args={[3.2, 0.02, 16, 100]} />
+        <meshBasicMaterial color="#0891B2" transparent opacity={0.3} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[2.8, 0.01, 16, 100]} />
+        <meshBasicMaterial color="#0891B2" transparent opacity={0.2} />
+      </mesh>
+    </group>
+  );
+};
+
+// --- Haupt App Component ---
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('view');
+  const [rotationSpeed, setRotationSpeed] = useState(1);
+  const [showSatellites, setShowSatellites] = useState(true);
+
+  return (
+    <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
+      
+      {/* Header / HUD Top */}
+      <div className="absolute top-0 left-0 w-full z-10 p-4 flex justify-between items-center bg-gradient-to-b from-slate-900/90 to-transparent pointer-events-none">
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <div className="p-2 bg-blue-600/20 rounded-lg border border-blue-500/50">
+            <Globe className="w-6 h-6 text-blue-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-wider text-blue-100">TERRA<span className="text-blue-500">VISION</span></h1>
+            <p className="text-xs text-slate-400 uppercase tracking-widest">Orbital Monitoring System</p>
+          </div>
         </div>
         
-        <div className="absolute bottom-10 left-10 hidden md:block text-xs font-sans text-slate-500 space-y-1">
-          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Start: Westafrika (~1770)</div>
-          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Ziel: Osnabrück (1833)</div>
+        <div className="flex gap-4 text-xs font-mono text-slate-400 pointer-events-auto">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            SYSTEM ONLINE
+          </div>
+          <div className="hidden md:block">
+            LAT: 52.2312 | LON: 13.4321
+          </div>
         </div>
       </div>
 
-      <div 
-        className={`absolute z-20 top-0 left-0 h-full w-full md:w-5/12 p-8 md:p-12 flex flex-col justify-center bg-slate-900/90 backdrop-blur-md border-r border-white/10 transition-transform duration-1000 ease-out ${
-          showText ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="overflow-y-auto h-full pr-4 custom-scrollbar">
-          <span className="text-amber-500 font-bold tracking-widest text-xs uppercase mb-2 block">
-            Station 1
-          </span>
-          <h2 className="text-3xl font-bold mb-6 text-white border-b border-slate-700 pb-4">
-            Die Goldküste
-          </h2>
+      {/* 3D Scene Canvas */}
+      <div className="flex-grow relative">
+        <Canvas camera={{ position: [0, 0, 7], fov: 45 }}>
+          {/* Licht */}
+          <ambientLight intensity={0.5} color="#4c1d95" />
+          <pointLight position={[10, 10, 10]} intensity={1.5} color="#60a5fa" />
+          <pointLight position={[-10, -5, -10]} intensity={0.5} color="#c084fc" />
           
-          <div className="space-y-6 text-slate-300 font-light leading-relaxed text-lg">
-            <p>
-              Hier beginnt die Rekonstruktion eines Lebens, das durch koloniale Gewalt entwurzelt wurde. 
-              Die "Goldküste" (heutiges Ghana) war im 18. Jahrhundert ein zentraler Knotenpunkt des transatlantischen Sklavenhandels.
-            </p>
-            <p className="text-sm border-l-2 border-amber-500 pl-4 italic text-slate-400 my-6">
-              "Es ist wichtig, nicht nur die Ankunft in Osnabrück zu betrachten, sondern den Ort des Ursprungs visuell und gedanklich als eigenständigen Raum zu würdigen."
-            </p>
-            <p>
-              [Platzhalter für wissenschaftliche Einordnung: Wie gelangte Schepeler in das System der Sklaverei? Welche Rolle spielten europäische Handelskompanien vor Ort?]
-            </p>
-          </div>
+          {/* Hintergrund Sterne */}
+          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
 
-          <div className="mt-12 flex gap-4">
-             <button className="px-6 py-2 border border-slate-600 rounded hover:bg-slate-800 text-sm transition-colors">
-               Quellen anzeigen
-             </button>
-             <button className="px-6 py-2 bg-slate-100 text-slate-900 rounded hover:bg-white text-sm font-medium transition-colors">
-               Nächste Station: Osnabrück
-             </button>
+          {/* Objekte */}
+          <group>
+             {/* Die Erde wird etwas gedreht, damit sie "schöner" aussieht */}
+            <group rotation={[0.2, 0, 0.1]}> 
+                <EarthModel autoRotate={rotationSpeed > 0} />
+                <DataRings />
+                
+                {showSatellites && (
+                  <>
+                    <Satellite radius={3.5} speed={0.5} offset={0} color="#FBBF24" size={0.1} />
+                    <Satellite radius={4.2} speed={0.3} offset={2} color="#34D399" size={0.08} />
+                    <Satellite radius={3.0} speed={0.8} offset={4} color="#F472B6" size={0.06} />
+                  </>
+                )}
+
+                {/* Beispiel Marker (Berlin & New York grob geschätzt auf der Kugel) */}
+                <group rotation={[0, -2.5, 0]}> {/* Rotation anpassen um Orte sichtbar zu machen */}
+                    <LocationMarker position={[1.2, 1.4, 0.5]} label="Station Alpha" />
+                    <LocationMarker position={[-0.5, 0.2, 1.9]} label="Hub Beta" />
+                </group>
+            </group>
+          </group>
+
+          <OrbitControls 
+            enablePan={false} 
+            enableZoom={true} 
+            minDistance={4} 
+            maxDistance={12}
+            autoRotate={activeTab === 'scan'}
+            autoRotateSpeed={0.5}
+          />
+        </Canvas>
+
+        {/* HUD UI Overlays */}
+        
+        {/* Linke Sidebar - Controls */}
+        <div className="absolute top-1/2 left-4 -translate-y-1/2 flex flex-col gap-4 z-10 pointer-events-none">
+           <div className="bg-slate-900/80 backdrop-blur-md p-3 rounded-xl border border-slate-700/50 pointer-events-auto shadow-xl flex flex-col gap-3 w-16 items-center">
+              <button 
+                onClick={() => setActiveTab('view')}
+                className={`p-3 rounded-lg transition-all ${activeTab === 'view' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Navigation size={20} />
+              </button>
+              <button 
+                onClick={() => setActiveTab('layers')}
+                className={`p-3 rounded-lg transition-all ${activeTab === 'layers' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Layers size={20} />
+              </button>
+              <button 
+                onClick={() => setActiveTab('scan')}
+                className={`p-3 rounded-lg transition-all ${activeTab === 'scan' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Scan size={20} />
+              </button>
+              <div className="h-px w-8 bg-slate-700 my-1"></div>
+               <button 
+                className="p-3 rounded-lg text-slate-400 hover:bg-slate-800 transition-all"
+                title="Info"
+              >
+                <Info size={20} />
+              </button>
+           </div>
+        </div>
+
+        {/* Rechte Sidebar - Context Panel */}
+        <div className="absolute top-20 right-4 w-64 z-10">
+          <div className="bg-slate-900/80 backdrop-blur-md p-5 rounded-xl border border-slate-700/50 shadow-2xl transition-all duration-300">
+            <h2 className="text-sm font-bold text-slate-200 uppercase mb-4 flex items-center gap-2">
+              <Activity size={16} className="text-blue-500" />
+              Control Panel
+            </h2>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Rotation Speed</span>
+                  <span>{Math.round(rotationSpeed * 100)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="5" 
+                  step="0.1"
+                  value={rotationSpeed}
+                  onChange={(e) => setRotationSpeed(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <span className="text-xs text-slate-300">Satelliten anzeigen</span>
+                <button 
+                  onClick={() => setShowSatellites(!showSatellites)}
+                  className={`w-10 h-5 rounded-full relative transition-colors ${showSatellites ? 'bg-blue-600' : 'bg-slate-600'}`}
+                >
+                  <span className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${showSatellites ? 'left-6' : 'left-1'}`}></span>
+                </button>
+              </div>
+              
+              <div className="pt-2 border-t border-slate-700/50">
+                <div className="text-xs text-slate-500 mb-2">ACTIVE SENSORS</div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-800/50 p-2 rounded border border-slate-700/30 text-center">
+                        <div className="text-[10px] text-slate-400">TEMP</div>
+                        <div className="text-sm font-mono text-blue-300">14°C</div>
+                    </div>
+                    <div className="bg-slate-800/50 p-2 rounded border border-slate-700/30 text-center">
+                        <div className="text-[10px] text-slate-400">WIND</div>
+                        <div className="text-sm font-mono text-blue-300">12km/h</div>
+                    </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   );
 };
