@@ -3,306 +3,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biografie: Christian Gerhard Schepeler</title>
+    <title>Spuren des Kolonialismus - Christian Gerhard Schepeler</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (für das Styling) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Leaflet CSS -->
+    <!-- Leaflet CSS & JS (Die Karten-Bibliothek) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Merriweather:ital,wght@0,300;0,700;1,300&display=swap" rel="stylesheet">
-
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        h1, h2, h3, .historical-text { font-family: 'Merriweather', serif; }
-        
-        #map { height: 100vh; width: 100%; z-index: 0; background: #f0f0f0; }
-        
-        /* UI Panels */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-
-        /* Loading Spinner */
-        #loader { transition: opacity 0.5s ease; }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #d97706;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Custom Arrow Icon Styles */
-        .arrow-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .arrow-symbol {
-            font-size: 16px;
-            color: #92400e; /* Amber-800 */
-            text-shadow: 1px 1px 0px rgba(255,255,255,0.8);
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body class="bg-gray-100 overflow-hidden relative">
-
-    <div id="loader" class="absolute inset-0 z-[2000] bg-gray-100 flex flex-col items-center justify-center">
-        <div class="spinner mb-4"></div>
-        <p class="text-gray-500 text-sm font-medium animate-pulse">Karte wird geladen...</p>
-    </div>
-
-    <div id="map"></div>
-
-    <div class="absolute top-6 left-6 z-[1000] w-full max-w-md pointer-events-none transition-all duration-700" id="ui-container">
-        <div class="glass-panel rounded-xl p-6 mb-4 pointer-events-auto transform transition-all hover:scale-[1.01]">
-            <div class="border-l-4 border-amber-600 pl-4">
-                <h1 class="text-2xl font-bold text-gray-900 leading-tight">Christian Gerhard Schepeler</h1>
-                <p class="text-amber-800 text-sm italic mt-1 historical-text">Eine Reise vom 17. Jahrhundert bis nach Osnabrück</p>
-            </div>
-            
-            <div id="intro-controls" class="mt-6">
-                <p class="text-gray-600 text-sm mb-4 leading-relaxed">
-                    Begleiten Sie den Weg von der Goldküste Westafrikas über die Schrecken der Sklaverei bis hin zur Taufe in Osnabrück.
-                </p>
-                <button onclick="startJourney()" class="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium tracking-wide shadow-lg transition-all flex items-center justify-center gap-2 group">
-                    <span>Reise beginnen</span>
-                    <span class="group-hover:translate-x-1 transition-transform">⟶</span>
-                </button>
-            </div>
-
-            <div id="nav-controls" class="hidden mt-4 flex gap-3 pt-4 border-t border-gray-100">
-                <button onclick="prevStation()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm transition-colors">
-                    ← Zurück
-                </button>
-                <button onclick="nextStation()" class="flex-1 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-sm font-medium shadow-md transition-all">
-                    Nächste Station
-                </button>
-            </div>
-        </div>
-
-        <div id="info-box" class="glass-panel rounded-xl p-6 pointer-events-auto hidden transform translate-y-4 opacity-0 transition-all duration-500">
-            <span id="info-date" class="inline-block px-2 py-1 bg-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wider rounded mb-2">Datum</span>
-            <h2 id="info-title" class="text-xl font-bold text-gray-800 mb-2">Titel</h2>
-            <p id="info-desc" class="text-gray-600 text-sm leading-relaxed mb-3">Beschreibung...</p>
-            <div class="h-1 w-12 bg-amber-500 rounded-full mt-2"></div>
-        </div>
-    </div>
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-    <script>
-        delete L.Icon.Default.prototype._getIconUrl;
-        L.Icon.Default.mergeOptions({
-            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        });
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-        // --- 1. HAUPTSTATIONEN (Für Kamera & Text) ---
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, .serif {
+            font-family: 'Merriweather', serif;
+        }
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f5f5f4; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #d6d3d1; 
+            border-radius: 20px;
+        }
+        /* Leaflet Popups */
+        .leaflet-popup-content-wrapper {
+            border-radius: 2px;
+            font-family: 'Merriweather', serif;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .leaflet-popup-tip {
+            background: white;
+        }
+        /* Timeline Node Active Pulse */
+        .timeline-node-active {
+            box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.3);
+        }
+    </style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stone: {
+                            50: '#fafaf9',
+                            100: '#f5f5f4',
+                            200: '#e7e5e4',
+                            300: '#d6d3d1',
+                            400: '#a8a29e',
+                            500: '#78716c',
+                            600: '#57534e',
+                            700: '#44403c',
+                            800: '#292524',
+                            900: '#1c1917',
+                        },
+                        amber: {
+                            700: '#b45309',
+                            800: '#92400e',
+                            900: '#78350f',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-stone-100 text-stone-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header Leiste -->
+    <header class="bg-stone-900 text-stone-200 p-3 shadow-md z-20 flex justify-between items-center border-b border-stone-700 shrink-0">
+        <div>
+            <h1 class="text-lg tracking-wider font-bold">SPUREN DES KOLONIALISMUS</h1>
+            <p class="text-[10px] text-stone-400 uppercase tracking-widest mt-0.5">Biografie: Christian Gerhard Schepeler</p>
+        </div>
+        <div class="flex gap-2">
+             <button onclick="toggleIntro()" class="p-1.5 hover:bg-stone-800 rounded-full transition-colors" title="Projekt-Info">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hauptbereich (Flex Container) -->
+    <div class="flex flex-1 relative flex-col md:flex-row overflow-hidden">
+        
+        <!-- Linke Spalte: Biografie & Steuerung -->
+        <div class="w-full md:w-1/3 lg:w-1/4 bg-white shadow-xl z-10 flex flex-col border-r border-stone-300 h-1/2 md:h-full relative">
+            
+            <!-- Scrollbarer Textbereich -->
+            <div class="p-5 flex-1 overflow-y-auto custom-scrollbar relative">
+                <div class="mb-3 inline-block px-2 py-0.5 bg-stone-100 border border-stone-300 rounded text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                    Station <span id="station-count">1</span> / 5
+                </div>
+                
+                <h2 id="station-year" class="text-3xl font-bold text-stone-900 mb-1 transition-opacity duration-300">1780</h2>
+                <h3 class="text-lg font-medium text-amber-800 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <span id="station-location">Osnabrück</span>
+                </h3>
+
+                <div class="prose prose-stone">
+                    <p id="station-description" class="text-sm leading-relaxed mb-4 transition-opacity duration-300 text-stone-800">
+                        Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.
+                    </p>
+                    
+                    <div class="bg-stone-50 border-l-4 border-stone-400 p-3 mt-4">
+                        <h4 class="text-xs font-bold text-stone-900 uppercase mb-1 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                            Historischer Kontext
+                        </h4>
+                        <p id="station-context" class="text-xs text-stone-600 italic transition-opacity duration-300 leading-relaxed">
+                            Der lokale Handel profitiert indirekt von der kolonialen Ökonomie.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons (Reduziert für Timeline Fokus) -->
+            <div class="p-3 bg-stone-50 border-t border-stone-200 flex justify-between items-center shrink-0">
+                <button id="btn-prev" onclick="prevStation()" disabled class="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wide transition-all opacity-30 cursor-not-allowed hover:bg-stone-200 text-stone-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    Zurück
+                </button>
+                
+                <button id="btn-next" onclick="nextStation()" class="flex items-center gap-1.5 px-5 py-1.5 rounded bg-stone-800 text-white text-xs font-bold uppercase tracking-wide transition-all shadow-md hover:bg-stone-700 hover:shadow-lg">
+                    <span id="btn-next-text">Weiter</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Rechte Spalte: Die Karte -->
+        <div id="map" class="flex-1 bg-stone-200 h-1/2 md:h-full w-full z-0"></div>
+
+        <!-- Quellenhinweis Karte -->
+        <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 text-[10px] text-stone-500 z-[400] pointer-events-none rounded shadow-sm">
+            Kartendaten: &copy; OpenStreetMap contributors, CartoDB
+        </div>
+    </div>
+
+    <!-- NEU: Zeitachse am unteren Bildrand (Verkleinert auf h-16) -->
+    <footer class="h-16 bg-stone-900 border-t-4 border-amber-800 shrink-0 z-30 relative flex flex-col justify-center shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
+        <!-- Connecting Line -->
+        <div class="absolute top-1/2 left-10 right-10 h-px bg-stone-700 -translate-y-1/2 z-0"></div>
+        
+        <!-- Nodes Container -->
+        <div id="timeline-container" class="relative z-10 flex justify-between items-center px-10 max-w-5xl mx-auto w-full">
+            <!-- Wird per JS befüllt -->
+        </div>
+    </footer>
+
+    <!-- Start-Modal (Intro) -->
+    <div id="intro-modal" class="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-300">
+        <div class="bg-white max-w-lg w-full p-8 rounded shadow-2xl relative border-t-4 border-amber-700">
+            <button onclick="toggleIntro()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-900">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div class="flex items-center gap-3 mb-4 text-amber-800">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                <h2 class="text-2xl serif font-bold">Biografische Spurensuche</h2>
+            </div>
+            <p class="text-stone-700 mb-4 leading-relaxed">
+                Diese interaktive Karte rekonstruiert den Lebensweg des Osnabrücker Kaufmanns <strong>Christian Gerhard Schepeler</strong> (1780–1841).
+            </p>
+            <p class="text-stone-700 mb-6 leading-relaxed">
+                Nutzen Sie die <strong>Zeitachse am unteren Rand</strong> oder die Schaltflächen, um durch die Stationen seines Lebens zu navigieren.
+            </p>
+            <div class="text-xs text-stone-500 border-t border-stone-200 pt-4">
+                <p>Projekt: Osnabrück postkolonial. <br>Design-Konzept: Wissenschaftlich-historische Aufbereitung.</p>
+            </div>
+            <button onclick="toggleIntro()" class="mt-6 w-full bg-stone-900 text-white py-3 font-bold uppercase tracking-widest hover:bg-stone-800 transition-colors">
+                Erkundung starten
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATEN ---
         const stations = [
             {
-                id: "goldkueste",
-                title: "Station I: Die Goldküste (Guinea)",
-                date: "Datum hier einfügen (z.B. ca. 1690)",
-                lat: 5.5500, 
-                lng: -0.2000, 
-                zoom: 6,
-                description: "Eigene Beschreibung der Station I hier einfügen. (Herkunft, Kontext des Sklavenhandels etc.)"
+                id: 1,
+                year: "1780",
+                location: "Osnabrück",
+                coords: [52.2799, 8.0472],
+                title: "Geburt und Herkunft",
+                description: "Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.",
+                context: "Osnabrücker Leinen ('Osnaburgs') war weltweit bekannt und wurde unter anderem zur Kleidung versklavter Menschen in Amerika genutzt."
             },
             {
-                id: "ueberfahrt",
-                title: "Station II: Verschleppung & Überfahrt (Atlantik)",
-                date: "Datum hier einfügen (z.B. Unbekanntes Jahr)",
-                lat: 25.0000, 
-                lng: -40.0000, 
-                zoom: 4,
-                description: "Eigene Beschreibung der Station II hier einfügen. (Details zur Atlantiküberquerung, Bedingungen an Bord etc.)"
+                id: 2,
+                year: "1800",
+                location: "London",
+                coords: [51.5074, -0.1278],
+                title: "Kaufmännische Ausbildung",
+                description: "Schepeler geht nach London, das finanzielle Herz des britischen Empires. Hier kommt er in direkten Kontakt mit den globalen Warenströmen (Zucker, Kaffee, Baumwolle) und lernt die Mechanismen des Welthandels kennen.",
+                context: "London ist zu dieser Zeit die Drehscheibe des kolonialen Kapitals. Schepeler baut hier Netzwerke auf, die ihm später nützen werden."
             },
             {
-                id: "hamburg",
-                title: "Station III: Verkauf nach Hamburg",
-                date: "Datum hier einfügen (z.B. Frühes 18. Jh.)",
-                lat: 53.5511, 
-                lng: 9.9937, 
-                zoom: 10,
-                description: "Eigene Beschreibung der Station III hier einfügen. (Verkauf in Hamburg, Situation in der Hansestadt etc.)"
+                id: 3,
+                year: "1808",
+                location: "Cádiz",
+                coords: [36.5271, -6.2886],
+                title: "Spanischer Krieg",
+                description: "Er schließt sich dem spanischen Widerstand gegen Napoleon an. Cádiz ist nicht nur Kriegsschauplatz, sondern auch das wichtigste Tor zum spanischen Kolonialreich in Amerika. Schepeler steigt zum Oberst auf.",
+                context: "In Cádiz verfasste Schepeler später wichtige historische Werke. Die Stadt war ein Schmelztiegel liberaler Ideen und kolonialer Interessen."
             },
             {
-                id: "osnabrueck",
-                title: "Station IV: Ankunft in Osnabrück",
-                date: "Datum hier einfügen (z.B. Frühes 18. Jh.)",
-                lat: 52.2799, 
-                lng: 8.0472, 
-                zoom: 13,
-                description: "Eigene Beschreibung der Station IV hier einfügen. (Ankunft in Osnabrück, Taufe, Leben in Deutschland etc.)"
+                id: 4,
+                year: "1815",
+                location: "Aachen/Wien",
+                coords: [50.7753, 6.0839],
+                title: "Diplomatie",
+                description: "Nach den Kriegen bewegt sich Schepeler in diplomatischen Kreisen, unter anderem auf dem Aachener Kongress. Er nutzt seinen Reichtum und Einfluss und etabliert sich als Chronist seiner Zeit.",
+                context: "Die Neuordnung Europas nach 1815 ging oft zulasten der Kolonien, deren Ressourcen weiterhin zur Stabilisierung europäischer Mächte dienten."
+            },
+            {
+                id: 5,
+                year: "1841",
+                location: "Osnabrück",
+                coords: [52.2799, 8.0472],
+                title: "Tod",
+                description: "Schepeler stirbt in seiner Heimatstadt. Sein hinterlassenes Vermögen und seine Schriften zeugen von einem Leben, das tief in die europäischen und globalen Konflikte seiner Zeit verstrickt war.",
+                context: "Sein Grab befindet sich auf dem Hasefriedhof. Es ist ein Denkmal für einen 'Global Player' des 19. Jahrhunderts aus der Provinz."
             }
         ];
 
-        // --- 2. DETAILLIERTE ROUTENPUNKTE (Für die Linie & Pfeile) ---
-        // Die Route wurde angepasst, um die westafrikanische Küste zu umgehen und durch den Ärmelkanal, dann nördlich der Friesischen Inseln in die Nordsee zu führen.
-        const routePath = [
-            [5.5500, -0.2000],   // 1. Start: Goldküste
-            [5.0, -15.0],        // 2. Waypoint: Atlantik-Umgehung Westküste
-            [15.0, -35.0],       // 3. Waypoint: Tiefer im Atlantik
-            [25.0000, -40.0000], // 4. Station: Atlantik-Überfahrt
-            [45.0, -15.0],       // 5. Waypoint: Bogen in Richtung Ärmelkanal
-            [50.5, 1.0],         // 6. Waypoint: Mitte Ärmelkanal / Doverstraße
-            [53.0, 4.0],         // 7. Waypoint: Nordsee (westlich der Niederlande)
-            [54.0, 7.5],         // 8. Waypoint: Nordsee (nördlich der Friesischen Inseln, vor Elbmündung)
-            [53.5511, 9.9937],   // 9. Station: Hamburg (via Elbe/Nordsee)
-            [52.2799, 8.0472]    // 10. Ende: Osnabrück (Landweg)
-        ];
-
-        // --- 3. MAP SETUP ---
-        const map = L.map('map', {
-            zoomControl: false,
-            fadeAnimation: true, 
-            markerZoomAnimation: true
-        }).setView([20, 0], 3); 
-
-        const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(map);
-
-        tiles.on('load', function() {
-            const loader = document.getElementById('loader');
-            if(loader) {
-                loader.style.opacity = '0';
-                setTimeout(() => loader.remove(), 500);
-            }
-        });
-        setTimeout(() => {
-            const loader = document.getElementById('loader');
-            if(loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 500); }
-        }, 3000);
-
+        // --- STATUS ---
+        let currentIndex = 0;
+        let map;
         let markers = [];
-        let currentStationIndex = -1;
+        let polyline;
 
-        // --- 4. VISUALISIERUNG DER ROUTE ---
+        // --- TIMELINE INITIALISIERUNG ---
+        function initTimeline() {
+            const container = document.getElementById('timeline-container');
+            container.innerHTML = ''; // Reset
 
-        // A) Die Linie zeichnen (basierend auf der detaillierten Route)
-        const routeLine = L.polyline(routePath, {
-            color: '#92400e', // Amber-800
-            weight: 2,
-            opacity: 0.6,
-            dashArray: '6, 10', // Gestrichelt
-            lineCap: 'round',
-            className: 'animate-dash' // Optional für CSS Animationen
-        }).addTo(map);
+            stations.forEach((station, index) => {
+                // Node Wrapper
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex flex-col items-center gap-1.5 cursor-pointer group relative';
+                wrapper.onclick = () => {
+                    currentIndex = index;
+                    updateUI();
+                };
 
-        // B) Hilfsfunktion für Winkel
-        function getAngle(lat1, lng1, lat2, lng2) {
-            const dy = lat2 - lat1;
-            const dx = lng2 - lng1;
-            let theta = Math.atan2(dy, dx); 
-            theta *= 180 / Math.PI; 
-            return -theta; 
+                // Node Circle (Kleiner: w-3 h-3)
+                const node = document.createElement('div');
+                node.id = `timeline-node-${index}`;
+                node.className = `w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 ${index === 0 ? 'bg-amber-700 border-amber-500 scale-125 timeline-node-active' : 'bg-stone-800 border-stone-500 hover:bg-stone-600'}`;
+
+                // Label (Year) - etwas kleiner
+                const label = document.createElement('span');
+                label.id = `timeline-label-${index}`;
+                label.className = `text-[10px] font-serif font-bold transition-colors duration-300 ${index === 0 ? 'text-amber-500' : 'text-stone-500 group-hover:text-stone-300'}`;
+                label.innerText = station.year;
+                
+                // Tooltip (Location)
+                const tooltip = document.createElement('div');
+                tooltip.className = 'absolute bottom-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none';
+                tooltip.innerText = station.location;
+
+                wrapper.appendChild(tooltip);
+                wrapper.appendChild(node);
+                wrapper.appendChild(label);
+                container.appendChild(wrapper);
+            });
         }
 
-        // C) Pfeile auf ALLEN Segmenten der detaillierten Route platzieren
-        // So folgen die Pfeile auch der Kurve um Afrika/Europa
-        for(let i=0; i < routePath.length - 1; i++) {
-            const start = routePath[i];
-            const end = routePath[i+1];
+        function updateTimelineState() {
+            stations.forEach((_, index) => {
+                const node = document.getElementById(`timeline-node-${index}`);
+                const label = document.getElementById(`timeline-label-${index}`);
+                
+                if (index === currentIndex) {
+                    // Active
+                    node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-amber-700 border-amber-500 scale-125 timeline-node-active';
+                    label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-amber-500';
+                } else if (index < currentIndex) {
+                    // Past (Visited)
+                    node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-amber-900/50 border-amber-800 cursor-pointer hover:bg-amber-700';
+                    label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-stone-400';
+                } else {
+                    // Future
+                    node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-stone-800 border-stone-600 cursor-pointer hover:bg-stone-600';
+                    label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-stone-600';
+                }
+            });
+        }
+
+        // --- MAP INITIALISIERUNG ---
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView(stations[0].coords, 12);
             
-            // Mitte des Segments
-            const midLat = (start[0] + end[0]) / 2;
-            const midLng = (start[1] + end[1]) / 2;
-            
-            // Winkel berechnen
-            const angle = getAngle(start[0], start[1], end[0], end[1]);
-            
-            const arrowIcon = L.divIcon({
-                className: 'arrow-icon',
-                html: `<div class="arrow-symbol" style="transform: rotate(${angle + 90}deg);">➤</div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            stations.forEach((station, index) => {
+                const marker = L.marker(station.coords).addTo(map);
+                const popupContent = `
+                    <div style="font-family: 'Merriweather', serif; padding: 4px;">
+                        <strong style="font-size: 1.1em; display:block; margin-bottom:4px;">${station.year}: ${station.location}</strong>
+                        <span style="font-family: 'Inter', sans-serif; color: #666;">${station.title}</span>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                marker.on('click', () => {
+                    currentIndex = index;
+                    updateUI();
+                });
+                markers.push(marker);
             });
 
-            L.marker([midLat, midLng], { icon: arrowIcon, interactive: false, opacity: 0.7 }).addTo(map);
+            const latlngs = stations.map(s => s.coords);
+            polyline = L.polyline(latlngs, {
+                color: '#78350f',
+                weight: 3,
+                opacity: 0.6,
+                dashArray: '10, 10'
+            }).addTo(map);
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            updateMapState();
         }
 
-        // --- 5. MARKER NUR FÜR ECHTE STATIONEN SETZEN ---
-        stations.forEach((station, index) => {
-            const marker = L.marker([station.lat, station.lng]).addTo(map);
-            marker.on('click', () => goToStation(index));
-            markers.push(marker);
-        });
+        // --- UI UPDATE LOGIK ---
+        function updateUI() {
+            const station = stations[currentIndex];
+            const hasPrev = currentIndex > 0;
+            const hasNext = currentIndex < stations.length - 1;
 
-        // --- 6. LOGIK ---
-        function startJourney() {
-            document.getElementById('intro-controls').classList.add('hidden');
-            document.getElementById('nav-controls').classList.remove('hidden');
-            goToStation(0);
+            const elements = ['station-year', 'station-location', 'station-description', 'station-context'];
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(5px)';
+            });
+
+            setTimeout(() => {
+                document.getElementById('station-count').innerText = currentIndex + 1;
+                document.getElementById('station-year').innerText = station.year;
+                document.getElementById('station-location').innerText = station.location;
+                document.getElementById('station-description').innerText = station.description;
+                document.getElementById('station-context').innerText = station.context;
+
+                const prevBtn = document.getElementById('btn-prev');
+                prevBtn.disabled = !hasPrev;
+                if (!hasPrev) {
+                    prevBtn.classList.add('opacity-30', 'cursor-not-allowed');
+                    prevBtn.classList.remove('hover:bg-stone-200');
+                } else {
+                    prevBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+                    prevBtn.classList.add('hover:bg-stone-200');
+                }
+
+                const nextBtn = document.getElementById('btn-next');
+                const nextBtnText = document.getElementById('btn-next-text');
+                nextBtn.disabled = !hasNext;
+                nextBtnText.innerText = hasNext ? 'Weiter' : 'Ende';
+                
+                if (!hasNext) {
+                    nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    nextBtn.classList.remove('hover:bg-stone-700', 'hover:shadow-lg');
+                } else {
+                    nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    nextBtn.classList.add('hover:bg-stone-700', 'hover:shadow-lg');
+                }
+
+                elements.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.style.transition = 'all 0.5s ease-out';
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateY(0)';
+                });
+            }, 300);
+
+            updateMapState();
+            updateTimelineState();
+        }
+
+        function updateMapState() {
+            const station = stations[currentIndex];
+            const zoomLevel = (station.id === 1 || station.id === 5) ? 12 : 6;
+            
+            map.flyTo(station.coords, zoomLevel, {
+                duration: 1.5,
+                easeLinearity: 0.25
+            });
+
+            markers.forEach((marker, idx) => {
+                if (idx === currentIndex) {
+                    marker.setOpacity(1);
+                    marker.setZIndexOffset(1000);
+                    setTimeout(() => marker.openPopup(), 500);
+                } else {
+                    marker.setOpacity(0.6);
+                    marker.setZIndexOffset(0);
+                    marker.closePopup();
+                }
+            });
         }
 
         function nextStation() {
-            if (currentStationIndex < stations.length - 1) {
-                goToStation(currentStationIndex + 1);
-            } else {
-                resetView();
+            if (currentIndex < stations.length - 1) {
+                currentIndex++;
+                updateUI();
             }
         }
 
         function prevStation() {
-            if (currentStationIndex > 0) {
-                goToStation(currentStationIndex - 1);
-            } else {
-                resetView();
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateUI();
             }
         }
 
-        function goToStation(index) {
-            currentStationIndex = index;
-            const station = stations[index];
-
-            map.flyTo([station.lat, station.lng], station.zoom, {
-                animate: true,
-                duration: 2.0, 
-                easeLinearity: 0.25
-            });
-
-            const infoBox = document.getElementById('info-box');
-            infoBox.classList.remove('translate-y-0', 'opacity-100');
-            infoBox.classList.add('translate-y-4', 'opacity-0');
-
-            setTimeout(() => {
-                document.getElementById('info-date').textContent = station.date;
-                document.getElementById('info-title').textContent = station.title;
-                document.getElementById('info-desc').textContent = station.description;
-
-                infoBox.classList.remove('hidden');
-                requestAnimationFrame(() => {
-                    infoBox.classList.remove('translate-y-4', 'opacity-0');
-                    infoBox.classList.add('translate-y-0', 'opacity-100');
-                });
-            }, 300);
-
-            markers[index].openPopup();
+        function toggleIntro() {
+            const modal = document.getElementById('intro-modal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
         }
 
-        function resetView() {
-            currentStationIndex = -1;
-            map.flyTo([20, 0], 3, { duration: 1.5 });
-            
-            document.getElementById('intro-controls').classList.remove('hidden');
-            document.getElementById('nav-controls').classList.add('hidden');
-            document.getElementById('info-box').classList.add('hidden');
-        }
+        // --- START ---
+        window.addEventListener('load', () => {
+            initTimeline(); // Init timeline first
+            initMap();
+            setTimeout(() => map.invalidateSize(), 100);
+        });
 
     </script>
 </body>
