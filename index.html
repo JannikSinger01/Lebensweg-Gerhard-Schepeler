@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spuren des Kolonialismus - Christian Gerhard Schepeler</title>
     
-    <!-- Tailwind CSS (für das Styling) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Leaflet CSS & JS (Die Karten-Bibliothek) -->
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
@@ -48,6 +48,31 @@
         .timeline-node-active {
             box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.3);
         }
+        
+        /* TUTORIAL STYLES */
+        .tutorial-active-element {
+            position: relative;
+            z-index: 60 !important;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+        }
+        /* Overlay für den Rest */
+        #tutorial-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+        #tutorial-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
     </style>
     
     <script>
@@ -86,8 +111,15 @@
             <h1 class="text-lg tracking-wider font-bold">SPUREN DES KOLONIALISMUS</h1>
             <p class="text-[10px] text-stone-400 uppercase tracking-widest mt-0.5">Biografie: Christian Gerhard Schepeler</p>
         </div>
-        <div class="flex gap-2">
-             <button onclick="toggleIntro()" class="p-1.5 hover:bg-stone-800 rounded-full transition-colors" title="Projekt-Info">
+        <div class="flex items-center gap-3">
+            <!-- Tutorial Button -->
+            <button onclick="startTutorial()" class="p-1.5 text-stone-400 hover:bg-stone-800 hover:text-amber-500 rounded-full transition-colors flex items-center gap-2" title="Hilfe / Tutorial">
+                <span class="text-xs uppercase font-bold hidden sm:inline">Hilfe</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </button>
+            
+            <!-- Info Button -->
+            <button onclick="toggleIntro()" class="p-1.5 text-stone-400 hover:bg-stone-800 hover:text-stone-200 rounded-full transition-colors" title="Projekt-Info">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
             </button>
         </div>
@@ -97,7 +129,7 @@
     <div class="flex flex-1 relative flex-col md:flex-row overflow-hidden">
         
         <!-- Linke Spalte: Biografie & Steuerung -->
-        <div class="w-full md:w-1/3 lg:w-1/4 bg-white shadow-xl z-10 flex flex-col border-r border-stone-300 h-1/2 md:h-full relative">
+        <div id="sidebar-panel" class="w-full md:w-1/3 lg:w-1/4 bg-white shadow-xl z-10 flex flex-col border-r border-stone-300 h-1/2 md:h-full relative transition-all duration-300">
             
             <!-- Scrollbarer Textbereich -->
             <div class="p-5 flex-1 overflow-y-auto custom-scrollbar relative">
@@ -142,17 +174,35 @@
             </div>
         </div>
 
-        <!-- Rechte Spalte: Die Karte -->
-        <div id="map" class="flex-1 bg-stone-200 h-1/2 md:h-full w-full z-0"></div>
+        <!-- Rechte Spalte: Die Karte & Overlays -->
+        <div id="map-wrapper" class="relative flex-1 h-1/2 md:h-full w-full z-0 bg-stone-200 transition-all duration-300">
+            <!-- Die Karte -->
+            <div id="map" class="absolute inset-0 z-0"></div>
 
-        <!-- Quellenhinweis Karte -->
-        <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 text-[10px] text-stone-500 z-[400] pointer-events-none rounded shadow-sm">
-            Kartendaten: &copy; OpenStreetMap contributors, CartoDB
+            <!-- Kontext-Panel (Overlay über der Karte) -->
+            <div id="context-widget" class="absolute top-4 right-4 z-[500] bg-white/95 backdrop-blur-sm p-4 rounded shadow-xl border border-stone-300 max-w-[280px] transition-transform hover:scale-[1.02]">
+                <h4 class="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    Hintergrund
+                </h4>
+                <p class="text-xs text-stone-700 mb-3 italic font-serif leading-tight">
+                    Die Kehrseite des Reichtums: Leinenhandel und Sklaverei.
+                </p>
+                <button onclick="toggleContext()" class="w-full flex items-center justify-center gap-2 bg-amber-800 hover:bg-amber-700 text-stone-100 px-3 py-2 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span>Kontext öffnen</span>
+                </button>
+            </div>
+
+            <!-- Quellenhinweis Karte -->
+            <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 text-[10px] text-stone-500 z-[400] pointer-events-none rounded shadow-sm">
+                Kartendaten: &copy; OpenStreetMap contributors, CartoDB
+            </div>
         </div>
     </div>
 
-    <!-- NEU: Zeitachse am unteren Bildrand (Verkleinert auf h-16) -->
-    <footer class="h-16 bg-stone-900 border-t-4 border-amber-800 shrink-0 z-30 relative flex flex-col justify-center shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
+    <!-- Zeitachse am unteren Bildrand -->
+    <footer id="timeline-footer" class="h-16 bg-stone-900 border-t-4 border-amber-800 shrink-0 z-30 relative flex flex-col justify-center shadow-[0_-5px_15px_rgba(0,0,0,0.3)] transition-all duration-300">
         <!-- Connecting Line -->
         <div class="absolute top-1/2 left-10 right-10 h-px bg-stone-700 -translate-y-1/2 z-0"></div>
         
@@ -162,8 +212,76 @@
         </div>
     </footer>
 
+    <!-- TUTORIAL OVERLAY ELEMENTS -->
+    <div id="tutorial-overlay"></div>
+
+    <!-- 2. Die Tutorial Info Box (Dynamisch positioniert) -->
+    <div id="tutorial-box" class="fixed bg-white p-4 rounded shadow-2xl border-l-4 border-amber-600 max-w-sm w-full z-[70] hidden opacity-0 transition-all duration-500 ease-in-out">
+        <h3 id="tutorial-title" class="text-lg serif font-bold text-stone-900 mb-1">Tutorial Start</h3>
+        <p id="tutorial-text" class="text-xs text-stone-600 mb-4 leading-relaxed">Willkommen.</p>
+        
+        <div class="flex justify-between items-center border-t border-stone-200 pt-3">
+            <span id="tutorial-step-indicator" class="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Schritt 1/4</span>
+            <div class="flex gap-2">
+                <button onclick="endTutorial()" class="px-2 py-1 text-[10px] font-bold text-stone-500 hover:text-stone-800 uppercase tracking-wider transition-colors">
+                    Ende
+                </button>
+                <button onclick="nextTutorialStep()" class="px-3 py-1 bg-stone-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-stone-700 rounded transition-colors shadow-md">
+                    Weiter
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Kontext / Vertiefungs-Modal (Sklaverei) -->
+    <div id="context-modal" class="hidden fixed inset-0 bg-stone-900/95 backdrop-blur-md z-[1000] flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-stone-100 max-w-4xl w-full max-h-[90vh] rounded shadow-2xl relative flex flex-col md:flex-row overflow-hidden border border-stone-600">
+            <!-- Close Button -->
+            <button onclick="toggleContext()" class="absolute top-4 right-4 z-10 text-stone-500 hover:text-stone-900 bg-white/50 rounded-full p-1 hover:bg-white transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <!-- Linke Seite: Text -->
+            <div class="w-full md:w-1/2 p-8 overflow-y-auto custom-scrollbar bg-white">
+                <div class="mb-4 text-amber-800 font-bold text-xs uppercase tracking-widest border-b border-amber-200 pb-2">Hintergrundinformationen</div>
+                <h2 class="text-3xl serif font-bold text-stone-900 mb-6">Osnabrücker Leinen & die koloniale Sklaverei</h2>
+                <div class="prose prose-stone prose-sm">
+                    <p>Die Geschichte des wohlhabenden Osnabrücker Bürgertums ist untrennbar mit der Ausbeutung versklavter Menschen in Amerika verknüpft. Das berühmte "True Born Osnaburgh" Leinen war kein Luxusgut für europäische Adelige, sondern oft billiges, robustes Gewebe für den Export.</p>
+                    <p><strong>Die Kleidung der Unfreiheit:</strong><br>Historische Quellen belegen, dass das grobe Leinen aus Westfalen massenhaft in die Karibik und die Südstaaten der USA verschifft wurde. Dort diente es als Standard-Bekleidung ("Slave Cloth") für Menschen, die auf Baumwoll- und Zuckerrohrplantagen zur Arbeit gezwungen wurden.</p>
+                    <blockquote class="border-l-4 border-amber-700 pl-4 italic my-4 text-stone-600">"Der Reichtum hiesiger Kaufleute basierte zu einem nicht unerheblichen Teil auf einem Wirtschaftskreislauf, der menschliches Leid als Treibstoff nutzte."</blockquote>
+                    <p>Schepeler, als Kaufmann in London und Spanien tätig, operierte genau an den Schnittstellen dieses Systems. Auch wenn er selbst keine Plantage besaß, so war sein Kapital doch Teil dieser atlantischen Ökonomie.</p>
+                </div>
+            </div>
+            <!-- Rechte Seite: Bilder-Galerie -->
+            <div class="w-full md:w-1/2 bg-stone-200 p-8 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+                <div class="text-stone-500 text-xs uppercase tracking-widest font-bold mb-2">Historische Quellen & Bilder</div>
+                <div class="bg-white p-3 shadow-sm rotate-1 transform hover:rotate-0 transition-transform duration-500">
+                    <div class="aspect-video bg-stone-300 flex items-center justify-center text-stone-500 mb-2 overflow-hidden relative">
+                         <span class="absolute text-4xl opacity-20 font-serif">IMG</span>
+                         <img src="/api/placeholder/400/320" alt="Platzhalter: Leinenweberei" class="object-cover w-full h-full opacity-50 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    </div>
+                    <p class="text-[10px] font-serif text-stone-600 italic">Abb. 1: Historische Darstellung der Leinenweberei in Westfalen. (Platzhalter)</p>
+                </div>
+                <div class="bg-white p-3 shadow-sm -rotate-1 transform hover:rotate-0 transition-transform duration-500">
+                    <div class="aspect-video bg-stone-300 flex items-center justify-center text-stone-500 mb-2 overflow-hidden relative">
+                         <span class="absolute text-4xl opacity-20 font-serif">IMG</span>
+                         <img src="/api/placeholder/400/320" alt="Platzhalter: Plantage" class="object-cover w-full h-full opacity-50 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    </div>
+                    <p class="text-[10px] font-serif text-stone-600 italic">Abb. 2: Darstellung einer Plantage in der Karibik, Absatzmarkt für "Osnaburgs". (Platzhalter)</p>
+                </div>
+                <div class="bg-white p-3 shadow-sm rotate-1 transform hover:rotate-0 transition-transform duration-500">
+                    <div class="aspect-square bg-stone-300 flex items-center justify-center text-stone-500 mb-2 overflow-hidden relative">
+                         <span class="absolute text-4xl opacity-20 font-serif">DOC</span>
+                         <img src="/api/placeholder/400/320" alt="Platzhalter: Dokument" class="object-cover w-full h-full opacity-50 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    </div>
+                    <p class="text-[10px] font-serif text-stone-600 italic">Abb. 3: Auszug aus einem Handelsregister oder Brief Schepelers. (Platzhalter)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Start-Modal (Intro) -->
-    <div id="intro-modal" class="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-300">
+    <div id="intro-modal" class="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 transition-opacity duration-300">
         <div class="bg-white max-w-lg w-full p-8 rounded shadow-2xl relative border-t-4 border-amber-700">
             <button onclick="toggleIntro()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-900">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -181,60 +299,25 @@
             <div class="text-xs text-stone-500 border-t border-stone-200 pt-4">
                 <p>Projekt: Osnabrück postkolonial. <br>Design-Konzept: Wissenschaftlich-historische Aufbereitung.</p>
             </div>
-            <button onclick="toggleIntro()" class="mt-6 w-full bg-stone-900 text-white py-3 font-bold uppercase tracking-widest hover:bg-stone-800 transition-colors">
-                Erkundung starten
-            </button>
+            <div class="flex flex-col gap-3 mt-6">
+                <button onclick="toggleIntro()" class="w-full bg-stone-900 text-white py-3 font-bold uppercase tracking-widest hover:bg-stone-800 transition-colors shadow-md">
+                    Erkundung starten
+                </button>
+                <button onclick="toggleIntro(); startTutorial();" class="w-full bg-white border border-stone-300 text-stone-700 py-2 font-bold uppercase tracking-widest hover:bg-stone-100 transition-colors text-xs">
+                    Tutorial ansehen
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
         // --- DATEN ---
         const stations = [
-            {
-                id: 1,
-                year: "1780",
-                location: "Osnabrück",
-                coords: [52.2799, 8.0472],
-                title: "Geburt und Herkunft",
-                description: "Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.",
-                context: "Osnabrücker Leinen ('Osnaburgs') war weltweit bekannt und wurde unter anderem zur Kleidung versklavter Menschen in Amerika genutzt."
-            },
-            {
-                id: 2,
-                year: "1800",
-                location: "London",
-                coords: [51.5074, -0.1278],
-                title: "Kaufmännische Ausbildung",
-                description: "Schepeler geht nach London, das finanzielle Herz des britischen Empires. Hier kommt er in direkten Kontakt mit den globalen Warenströmen (Zucker, Kaffee, Baumwolle) und lernt die Mechanismen des Welthandels kennen.",
-                context: "London ist zu dieser Zeit die Drehscheibe des kolonialen Kapitals. Schepeler baut hier Netzwerke auf, die ihm später nützen werden."
-            },
-            {
-                id: 3,
-                year: "1808",
-                location: "Cádiz",
-                coords: [36.5271, -6.2886],
-                title: "Spanischer Krieg",
-                description: "Er schließt sich dem spanischen Widerstand gegen Napoleon an. Cádiz ist nicht nur Kriegsschauplatz, sondern auch das wichtigste Tor zum spanischen Kolonialreich in Amerika. Schepeler steigt zum Oberst auf.",
-                context: "In Cádiz verfasste Schepeler später wichtige historische Werke. Die Stadt war ein Schmelztiegel liberaler Ideen und kolonialer Interessen."
-            },
-            {
-                id: 4,
-                year: "1815",
-                location: "Aachen/Wien",
-                coords: [50.7753, 6.0839],
-                title: "Diplomatie",
-                description: "Nach den Kriegen bewegt sich Schepeler in diplomatischen Kreisen, unter anderem auf dem Aachener Kongress. Er nutzt seinen Reichtum und Einfluss und etabliert sich als Chronist seiner Zeit.",
-                context: "Die Neuordnung Europas nach 1815 ging oft zulasten der Kolonien, deren Ressourcen weiterhin zur Stabilisierung europäischer Mächte dienten."
-            },
-            {
-                id: 5,
-                year: "1841",
-                location: "Osnabrück",
-                coords: [52.2799, 8.0472],
-                title: "Tod",
-                description: "Schepeler stirbt in seiner Heimatstadt. Sein hinterlassenes Vermögen und seine Schriften zeugen von einem Leben, das tief in die europäischen und globalen Konflikte seiner Zeit verstrickt war.",
-                context: "Sein Grab befindet sich auf dem Hasefriedhof. Es ist ein Denkmal für einen 'Global Player' des 19. Jahrhunderts aus der Provinz."
-            }
+            { id: 1, year: "1780", location: "Osnabrück", coords: [52.2799, 8.0472], title: "Geburt und Herkunft", description: "Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.", context: "Osnabrücker Leinen ('Osnaburgs') war weltweit bekannt und wurde unter anderem zur Kleidung versklavter Menschen in Amerika genutzt." },
+            { id: 2, year: "1800", location: "London", coords: [51.5074, -0.1278], title: "Kaufmännische Ausbildung", description: "Schepeler geht nach London, das finanzielle Herz des britischen Empires. Hier kommt er in direkten Kontakt mit den globalen Warenströmen (Zucker, Kaffee, Baumwolle) und lernt die Mechanismen des Welthandels kennen.", context: "London ist zu dieser Zeit die Drehscheibe des kolonialen Kapitals. Schepeler baut hier Netzwerke auf, die ihm später nützen werden." },
+            { id: 3, year: "1808", location: "Cádiz", coords: [36.5271, -6.2886], title: "Spanischer Krieg", description: "Er schließt sich dem spanischen Widerstand gegen Napoleon an. Cádiz ist nicht nur Kriegsschauplatz, sondern auch das wichtigste Tor zum spanischen Kolonialreich in Amerika. Schepeler steigt zum Oberst auf.", context: "In Cádiz verfasste Schepeler später wichtige historische Werke. Die Stadt war ein Schmelztiegel liberaler Ideen und kolonialer Interessen." },
+            { id: 4, year: "1815", location: "Aachen/Wien", coords: [50.7753, 6.0839], title: "Diplomatie", description: "Nach den Kriegen bewegt sich Schepeler in diplomatischen Kreisen, unter anderem auf dem Aachener Kongress. Er nutzt seinen Reichtum und Einfluss und etabliert sich als Chronist seiner Zeit.", context: "Die Neuordnung Europas nach 1815 ging oft zulasten der Kolonien, deren Ressourcen weiterhin zur Stabilisierung europäischer Mächte dienten." },
+            { id: 5, year: "1841", location: "Osnabrück", coords: [52.2799, 8.0472], title: "Tod", description: "Schepeler stirbt in seiner Heimatstadt. Sein hinterlassenes Vermögen und seine Schriften zeugen von einem Leben, das tief in die europäischen und globalen Konflikte seiner Zeit verstrickt war.", context: "Sein Grab befindet sich auf dem Hasefriedhof. Es ist ein Denkmal für einen 'Global Player' des 19. Jahrhunderts aus der Provinz." }
         ];
 
         // --- STATUS ---
@@ -243,13 +326,106 @@
         let markers = [];
         let polyline;
 
+        // --- TUTORIAL LOGIK ---
+        let tutorialStep = 0;
+        const tutorialSteps = [
+            {
+                elementId: 'sidebar-panel',
+                title: 'Biografie & Kontext',
+                text: 'Hier finden Sie die biografischen Details und historischen Einordnungen.',
+                positionClasses: 'top-1/2 right-4 md:right-10 -translate-y-1/2' // Rechts vom Panel
+            },
+            {
+                elementId: 'map-wrapper',
+                title: 'Interaktive Karte',
+                text: 'Zoomen und bewegen Sie die Karte, um die Stationen zu erkunden.',
+                positionClasses: 'top-1/2 left-4 md:left-10 -translate-y-1/2' // Links von der Karte (über Sidebar)
+            },
+            {
+                elementId: 'context-widget',
+                title: 'Vertiefung: Sklaverei',
+                text: 'Öffnen Sie hier vertiefende Essays und Quellen zur Kolonialgeschichte.',
+                positionClasses: 'bottom-24 left-4 md:left-10' // Unten links, weit weg von oben rechts
+            },
+            {
+                elementId: 'timeline-footer',
+                title: 'Zeitstrahl',
+                text: 'Navigieren Sie chronologisch durch das Leben Schepelers.',
+                positionClasses: 'top-20 left-1/2 -translate-x-1/2' // Oben mittig
+            }
+        ];
+
+        function startTutorial() {
+            tutorialStep = 0;
+            const overlay = document.getElementById('tutorial-overlay');
+            const box = document.getElementById('tutorial-box');
+            
+            overlay.classList.add('active');
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.remove('opacity-0'), 50);
+            
+            updateTutorialStep();
+        }
+
+        function updateTutorialStep() {
+            // 1. Reset
+            document.querySelectorAll('.tutorial-active-element').forEach(el => {
+                el.classList.remove('tutorial-active-element');
+            });
+            const box = document.getElementById('tutorial-box');
+
+            // 2. Step Data
+            const step = tutorialSteps[tutorialStep];
+            
+            // 3. Update Content
+            document.getElementById('tutorial-title').innerText = step.title;
+            document.getElementById('tutorial-text').innerText = step.text;
+            document.getElementById('tutorial-step-indicator').innerText = `Schritt ${tutorialStep + 1}/${tutorialSteps.length}`;
+
+            // 4. Positionierung (Alle Richtungen resetten, dann neue anwenden)
+            box.className = `fixed bg-white p-4 rounded shadow-2xl border-l-4 border-amber-600 max-w-sm w-full z-[70] transition-all duration-500 ease-in-out ${step.positionClasses}`;
+
+            // 5. Highlight
+            const element = document.getElementById(step.elementId);
+            if (element) {
+                element.classList.add('tutorial-active-element');
+                if(step.elementId === 'map-wrapper') {
+                   setTimeout(() => map.invalidateSize(), 100);
+                }
+            }
+        }
+
+        function nextTutorialStep() {
+            tutorialStep++;
+            if (tutorialStep >= tutorialSteps.length) {
+                endTutorial();
+            } else {
+                updateTutorialStep();
+            }
+        }
+
+        function endTutorial() {
+            const overlay = document.getElementById('tutorial-overlay');
+            const box = document.getElementById('tutorial-box');
+            
+            box.classList.add('opacity-0');
+            overlay.classList.remove('active');
+            
+            setTimeout(() => {
+                box.classList.add('hidden');
+                document.querySelectorAll('.tutorial-active-element').forEach(el => {
+                    el.classList.remove('tutorial-active-element');
+                });
+            }, 500);
+        }
+
+
         // --- TIMELINE INITIALISIERUNG ---
         function initTimeline() {
             const container = document.getElementById('timeline-container');
             container.innerHTML = ''; // Reset
 
             stations.forEach((station, index) => {
-                // Node Wrapper
                 const wrapper = document.createElement('div');
                 wrapper.className = 'flex flex-col items-center gap-1.5 cursor-pointer group relative';
                 wrapper.onclick = () => {
@@ -257,18 +433,15 @@
                     updateUI();
                 };
 
-                // Node Circle (Kleiner: w-3 h-3)
                 const node = document.createElement('div');
                 node.id = `timeline-node-${index}`;
                 node.className = `w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 ${index === 0 ? 'bg-amber-700 border-amber-500 scale-125 timeline-node-active' : 'bg-stone-800 border-stone-500 hover:bg-stone-600'}`;
 
-                // Label (Year) - etwas kleiner
                 const label = document.createElement('span');
                 label.id = `timeline-label-${index}`;
                 label.className = `text-[10px] font-serif font-bold transition-colors duration-300 ${index === 0 ? 'text-amber-500' : 'text-stone-500 group-hover:text-stone-300'}`;
                 label.innerText = station.year;
                 
-                // Tooltip (Location)
                 const tooltip = document.createElement('div');
                 tooltip.className = 'absolute bottom-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none';
                 tooltip.innerText = station.location;
@@ -286,15 +459,12 @@
                 const label = document.getElementById(`timeline-label-${index}`);
                 
                 if (index === currentIndex) {
-                    // Active
                     node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-amber-700 border-amber-500 scale-125 timeline-node-active';
                     label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-amber-500';
                 } else if (index < currentIndex) {
-                    // Past (Visited)
                     node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-amber-900/50 border-amber-800 cursor-pointer hover:bg-amber-700';
                     label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-stone-400';
                 } else {
-                    // Future
                     node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-stone-800 border-stone-600 cursor-pointer hover:bg-stone-600';
                     label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-stone-600';
                 }
@@ -304,7 +474,6 @@
         // --- MAP INITIALISIERUNG ---
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView(stations[0].coords, 12);
-            
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                 subdomains: 'abcd',
@@ -320,19 +489,13 @@
                     </div>
                 `;
                 marker.bindPopup(popupContent);
-                marker.on('click', () => {
-                    currentIndex = index;
-                    updateUI();
-                });
+                marker.on('click', () => { currentIndex = index; updateUI(); });
                 markers.push(marker);
             });
 
             const latlngs = stations.map(s => s.coords);
             polyline = L.polyline(latlngs, {
-                color: '#78350f',
-                weight: 3,
-                opacity: 0.6,
-                dashArray: '10, 10'
+                color: '#78350f', weight: 3, opacity: 0.6, dashArray: '10, 10'
             }).addTo(map);
 
             L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -397,57 +560,43 @@
         function updateMapState() {
             const station = stations[currentIndex];
             const zoomLevel = (station.id === 1 || station.id === 5) ? 12 : 6;
-            
-            map.flyTo(station.coords, zoomLevel, {
-                duration: 1.5,
-                easeLinearity: 0.25
-            });
-
+            map.flyTo(station.coords, zoomLevel, { duration: 1.5, easeLinearity: 0.25 });
             markers.forEach((marker, idx) => {
                 if (idx === currentIndex) {
-                    marker.setOpacity(1);
-                    marker.setZIndexOffset(1000);
-                    setTimeout(() => marker.openPopup(), 500);
+                    marker.setOpacity(1); marker.setZIndexOffset(1000); setTimeout(() => marker.openPopup(), 500);
                 } else {
-                    marker.setOpacity(0.6);
-                    marker.setZIndexOffset(0);
-                    marker.closePopup();
+                    marker.setOpacity(0.6); marker.setZIndexOffset(0); marker.closePopup();
                 }
             });
         }
 
-        function nextStation() {
-            if (currentIndex < stations.length - 1) {
-                currentIndex++;
-                updateUI();
-            }
-        }
-
-        function prevStation() {
-            if (currentIndex > 0) {
-                currentIndex--;
-                updateUI();
-            }
-        }
+        function nextStation() { if (currentIndex < stations.length - 1) { currentIndex++; updateUI(); } }
+        function prevStation() { if (currentIndex > 0) { currentIndex--; updateUI(); } }
 
         function toggleIntro() {
             const modal = document.getElementById('intro-modal');
             if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+                modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10);
             } else {
-                modal.classList.add('opacity-0');
-                setTimeout(() => modal.classList.add('hidden'), 300);
+                modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function toggleContext() {
+            const modal = document.getElementById('context-modal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
             }
         }
 
         // --- START ---
         window.addEventListener('load', () => {
-            initTimeline(); // Init timeline first
+            initTimeline();
             initMap();
             setTimeout(() => map.invalidateSize(), 100);
         });
-
     </script>
 </body>
 </html>
