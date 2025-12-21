@@ -73,6 +73,21 @@
             opacity: 1;
             pointer-events: auto;
         }
+        
+        /* Edit Mode Styles */
+        .waypoint-marker {
+            background-color: #fff;
+            border: 2px solid #b45309;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            display: block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            cursor: move;
+        }
+        .cursor-crosshair {
+            cursor: crosshair !important;
+        }
     </style>
     
     <script>
@@ -109,7 +124,7 @@
     <header class="bg-stone-900 text-stone-200 p-3 shadow-md z-20 flex justify-between items-center border-b border-stone-700 shrink-0">
         <div>
             <h1 class="text-lg tracking-wider font-bold">SPUREN DES KOLONIALISMUS</h1>
-            <p class="text-[10px] text-stone-400 uppercase tracking-widest mt-0.5">Biografie: Christian Gerhard Schepeler</p>
+            <p class="text-[10px] text-stone-400 uppercase tracking-widest mt-0.5">Biografie & Handelsrouten</p>
         </div>
         <div class="flex items-center gap-3">
             <!-- Tutorial Button -->
@@ -134,7 +149,7 @@
             <!-- Scrollbarer Textbereich -->
             <div class="p-5 flex-1 overflow-y-auto custom-scrollbar relative">
                 <div class="mb-3 inline-block px-2 py-0.5 bg-stone-100 border border-stone-300 rounded text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                    Station <span id="station-count">1</span> / 5
+                    Station <span id="station-count">1</span> / 4
                 </div>
                 
                 <h2 id="station-year" class="text-3xl font-bold text-stone-900 mb-1 transition-opacity duration-300">1780</h2>
@@ -145,7 +160,7 @@
 
                 <div class="prose prose-stone">
                     <p id="station-description" class="text-sm leading-relaxed mb-4 transition-opacity duration-300 text-stone-800">
-                        Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.
+                        Beschreibungstext...
                     </p>
                     
                     <div class="bg-stone-50 border-l-4 border-stone-400 p-3 mt-4">
@@ -154,7 +169,7 @@
                             Historischer Kontext
                         </h4>
                         <p id="station-context" class="text-xs text-stone-600 italic transition-opacity duration-300 leading-relaxed">
-                            Der lokale Handel profitiert indirekt von der kolonialen Ökonomie.
+                            Kontext...
                         </p>
                     </div>
                 </div>
@@ -178,6 +193,16 @@
         <div id="map-wrapper" class="relative flex-1 h-1/2 md:h-full w-full z-0 bg-stone-200 transition-all duration-300">
             <!-- Die Karte -->
             <div id="map" class="absolute inset-0 z-0"></div>
+
+            <!-- Edit Button (NEU & ERWEITERT) -->
+            <div class="absolute top-4 right-[300px] z-[500] flex flex-col gap-2">
+                <button id="edit-btn" onclick="toggleEditMode()" class="bg-white p-2 rounded shadow-md border border-stone-300 hover:bg-stone-50 text-stone-500 hover:text-amber-700 transition-colors" title="Route anpassen (Klicken & Ziehen)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <div id="edit-hint" class="hidden bg-amber-100 text-amber-800 text-[9px] font-bold p-1 rounded shadow-sm text-center border border-amber-300 uppercase tracking-tighter">
+                    Klick auf Linie<br>+ Punkt
+                </div>
+            </div>
 
             <!-- Kontext-Panel (Overlay über der Karte) -->
             <div id="context-widget" class="absolute top-4 right-4 z-[500] bg-white/95 backdrop-blur-sm p-4 rounded shadow-xl border border-stone-300 max-w-[280px] transition-transform hover:scale-[1.02]">
@@ -291,10 +316,10 @@
                 <h2 class="text-2xl serif font-bold">Biografische Spurensuche</h2>
             </div>
             <p class="text-stone-700 mb-4 leading-relaxed">
-                Diese interaktive Karte rekonstruiert den Lebensweg des Osnabrücker Kaufmanns <strong>Christian Gerhard Schepeler</strong> (1780–1841).
+                Diese interaktive Karte rekonstruiert den Lebensweg des Osnabrücker Kaufmanns <strong>Christian Gerhard Schepeler</strong> (1780–1841) und zeichnet die Routen des kolonialen Handels nach.
             </p>
             <p class="text-stone-700 mb-6 leading-relaxed">
-                Nutzen Sie die <strong>Zeitachse am unteren Rand</strong> oder die Schaltflächen, um durch die Stationen seines Lebens zu navigieren.
+                Nutzen Sie die <strong>Zeitachse am unteren Rand</strong> oder die Schaltflächen, um durch die Stationen zu navigieren.
             </p>
             <div class="text-xs text-stone-500 border-t border-stone-200 pt-4">
                 <p>Projekt: Osnabrück postkolonial. <br>Design-Konzept: Wissenschaftlich-historische Aufbereitung.</p>
@@ -311,153 +336,295 @@
     </div>
 
     <script>
-        // --- DATEN ---
+        // --- NEUE DATEN STRUKTUR (MIT WAYPOINTS) ---
+        // waypoints: Array von Koordinaten [lat, lng] zwischen dieser Station und der nächsten
         const stations = [
-            { id: 1, year: "1780", location: "Osnabrück", coords: [52.2799, 8.0472], title: "Geburt und Herkunft", description: "Christian Gerhard Schepeler wird in Osnabrück geboren. Die Stadt ist zu dieser Zeit ein Zentrum der westfälischen Leinenproduktion – ein Gut, das oft als Tauschware im transatlantischen Dreieckshandel dient.", context: "Osnabrücker Leinen ('Osnaburgs') war weltweit bekannt und wurde unter anderem zur Kleidung versklavter Menschen in Amerika genutzt." },
-            { id: 2, year: "1800", location: "London", coords: [51.5074, -0.1278], title: "Kaufmännische Ausbildung", description: "Schepeler geht nach London, das finanzielle Herz des britischen Empires. Hier kommt er in direkten Kontakt mit den globalen Warenströmen (Zucker, Kaffee, Baumwolle) und lernt die Mechanismen des Welthandels kennen.", context: "London ist zu dieser Zeit die Drehscheibe des kolonialen Kapitals. Schepeler baut hier Netzwerke auf, die ihm später nützen werden." },
-            { id: 3, year: "1808", location: "Cádiz", coords: [36.5271, -6.2886], title: "Spanischer Krieg", description: "Er schließt sich dem spanischen Widerstand gegen Napoleon an. Cádiz ist nicht nur Kriegsschauplatz, sondern auch das wichtigste Tor zum spanischen Kolonialreich in Amerika. Schepeler steigt zum Oberst auf.", context: "In Cádiz verfasste Schepeler später wichtige historische Werke. Die Stadt war ein Schmelztiegel liberaler Ideen und kolonialer Interessen." },
-            { id: 4, year: "1815", location: "Aachen/Wien", coords: [50.7753, 6.0839], title: "Diplomatie", description: "Nach den Kriegen bewegt sich Schepeler in diplomatischen Kreisen, unter anderem auf dem Aachener Kongress. Er nutzt seinen Reichtum und Einfluss und etabliert sich als Chronist seiner Zeit.", context: "Die Neuordnung Europas nach 1815 ging oft zulasten der Kolonien, deren Ressourcen weiterhin zur Stabilisierung europäischer Mächte dienten." },
-            { id: 5, year: "1841", location: "Osnabrück", coords: [52.2799, 8.0472], title: "Tod", description: "Schepeler stirbt in seiner Heimatstadt. Sein hinterlassenes Vermögen und seine Schriften zeugen von einem Leben, das tief in die europäischen und globalen Konflikte seiner Zeit verstrickt war.", context: "Sein Grab befindet sich auf dem Hasefriedhof. Es ist ein Denkmal für einen 'Global Player' des 19. Jahrhunderts aus der Provinz." }
+            { 
+                id: 1, year: "Station 1", location: "Goldküste (Westafrika)", coords: [5.55, -0.20], 
+                title: "Handelsplatz & Menschenhandel", 
+                description: "Die Goldküste war ein zentraler Ort des transatlantischen Sklavenhandels. Von hier aus wurden versklavte Menschen, oft im Austausch gegen europäische Waren wie Leinen und Waffen, nach Amerika verschifft.", 
+                context: "Hier begann für viele Menschen der grausame Weg über den Atlantik.",
+                waypoints: [[1.5, -15.0]] // Default curve point towards Atlantic
+            },
+            { 
+                id: 2, year: "Station 2", location: "Atlantik", coords: [15.0, -35.0], 
+                title: "Die Middle Passage", 
+                description: "Die Route über den Atlantik war Teil des Dreieckshandels. Schiffe transportierten versklavte Menschen unter unmenschlichen Bedingungen in die Kolonien. Auf dem Rückweg brachten sie Kolonialwaren wie Zucker und Baumwolle nach Europa.", 
+                context: "Der Atlantik wurde zum Grab für Tausende, die die Überfahrt nicht überlebten.",
+                waypoints: [[35.0, -20.0], [48.0, -5.0]] // Curve towards Europe avoiding direct line through Spain/France land
+            },
+            { 
+                id: 3, year: "Station 3", location: "Hamburg", coords: [53.55, 9.99], 
+                title: "Tor zur Welt", 
+                description: "Hamburg war einer der wichtigsten Importhäfen für Kolonialwaren in Deutschland. Hier kamen Zucker, Kaffee und Baumwolle an, und von hier wurde das 'Osnaburger' Leinen in die Welt exportiert.", 
+                context: "Kaufleute in Hamburg und Osnabrück profitierten massiv von dieser Logistik.",
+                waypoints: [[53.0, 8.5]] // Small curve to Osnabrück
+            },
+            { 
+                id: 4, year: "Station 4", location: "Osnabrück Marienkirche", coords: [52.277, 8.043], 
+                title: "Lokaler Reichtum & Gedenken", 
+                description: "In Osnabrück manifestierte sich der Reichtum durch den Leinenhandel in bürgerlichen Bauten und Stiftungen. Die Marienkirche steht symbolisch im Zentrum der Stadt, wo lokale Geschichte und globale Verflechtungen aufeinandertreffen.", 
+                context: "Heute ein Ort der Auseinandersetzung mit der eigenen historischen Verantwortung.",
+                waypoints: [] 
+            }
         ];
 
         // --- STATUS ---
         let currentIndex = 0;
         let map;
         let markers = [];
+        let waypointMarkers = []; // Array to store editing handles
         let polyline;
+        let isEditMode = false;
 
         // --- TUTORIAL LOGIK ---
         let tutorialStep = 0;
         const tutorialSteps = [
-            {
-                elementId: 'sidebar-panel',
-                title: 'Biografie & Kontext',
-                text: 'Hier finden Sie die biografischen Details und historischen Einordnungen.',
-                positionClasses: 'top-1/2 right-4 md:right-10 -translate-y-1/2' // Rechts vom Panel
-            },
-            {
-                elementId: 'map-wrapper',
-                title: 'Interaktive Karte',
-                text: 'Zoomen und bewegen Sie die Karte, um die Stationen zu erkunden.',
-                positionClasses: 'top-1/2 left-4 md:left-10 -translate-y-1/2' // Links von der Karte (über Sidebar)
-            },
-            {
-                elementId: 'context-widget',
-                title: 'Vertiefung: Sklaverei',
-                text: 'Öffnen Sie hier vertiefende Essays und Quellen zur Kolonialgeschichte.',
-                positionClasses: 'bottom-24 left-4 md:left-10' // Unten links, weit weg von oben rechts
-            },
-            {
-                elementId: 'timeline-footer',
-                title: 'Zeitstrahl',
-                text: 'Navigieren Sie chronologisch durch das Leben Schepelers.',
-                positionClasses: 'top-20 left-1/2 -translate-x-1/2' // Oben mittig
-            }
+            { elementId: 'sidebar-panel', title: 'Stationen & Kontext', text: 'Hier finden Sie Details zu den Stationen des Handelsnetzes.', positionClasses: 'top-1/2 right-4 md:right-10 -translate-y-1/2' },
+            { elementId: 'map-wrapper', title: 'Interaktive Karte', text: 'Zoomen und bewegen Sie die Karte, um die Routen zu erkunden.', positionClasses: 'top-1/2 left-4 md:left-10 -translate-y-1/2' },
+            { elementId: 'edit-btn', title: 'Route anpassen', text: 'Aktivieren Sie den Stift, um Stationen zu verschieben. Klicken Sie auf die gestrichelte Linie, um neue Punkte hinzuzufügen und die Route zu biegen.', positionClasses: 'top-16 right-[320px]' },
+            { elementId: 'context-widget', title: 'Vertiefung', text: 'Öffnen Sie hier vertiefende Informationen zur Geschichte.', positionClasses: 'bottom-24 left-4 md:left-10' },
+            { elementId: 'timeline-footer', title: 'Navigation', text: 'Wechseln Sie hier zwischen den geographischen Stationen.', positionClasses: 'top-20 left-1/2 -translate-x-1/2' }
         ];
 
         function startTutorial() {
             tutorialStep = 0;
-            const overlay = document.getElementById('tutorial-overlay');
+            document.getElementById('tutorial-overlay').classList.add('active');
             const box = document.getElementById('tutorial-box');
-            
-            overlay.classList.add('active');
             box.classList.remove('hidden');
             setTimeout(() => box.classList.remove('opacity-0'), 50);
-            
             updateTutorialStep();
         }
 
         function updateTutorialStep() {
-            // 1. Reset
-            document.querySelectorAll('.tutorial-active-element').forEach(el => {
-                el.classList.remove('tutorial-active-element');
-            });
+            document.querySelectorAll('.tutorial-active-element').forEach(el => el.classList.remove('tutorial-active-element'));
             const box = document.getElementById('tutorial-box');
-
-            // 2. Step Data
             const step = tutorialSteps[tutorialStep];
             
-            // 3. Update Content
             document.getElementById('tutorial-title').innerText = step.title;
             document.getElementById('tutorial-text').innerText = step.text;
             document.getElementById('tutorial-step-indicator').innerText = `Schritt ${tutorialStep + 1}/${tutorialSteps.length}`;
-
-            // 4. Positionierung (Alle Richtungen resetten, dann neue anwenden)
             box.className = `fixed bg-white p-4 rounded shadow-2xl border-l-4 border-amber-600 max-w-sm w-full z-[70] transition-all duration-500 ease-in-out ${step.positionClasses}`;
 
-            // 5. Highlight
             const element = document.getElementById(step.elementId);
             if (element) {
                 element.classList.add('tutorial-active-element');
-                if(step.elementId === 'map-wrapper') {
-                   setTimeout(() => map.invalidateSize(), 100);
-                }
+                if(step.elementId === 'map-wrapper') setTimeout(() => map.invalidateSize(), 100);
             }
         }
 
         function nextTutorialStep() {
             tutorialStep++;
-            if (tutorialStep >= tutorialSteps.length) {
-                endTutorial();
-            } else {
-                updateTutorialStep();
-            }
+            if (tutorialStep >= tutorialSteps.length) endTutorial();
+            else updateTutorialStep();
         }
 
         function endTutorial() {
-            const overlay = document.getElementById('tutorial-overlay');
             const box = document.getElementById('tutorial-box');
-            
             box.classList.add('opacity-0');
-            overlay.classList.remove('active');
-            
+            document.getElementById('tutorial-overlay').classList.remove('active');
             setTimeout(() => {
                 box.classList.add('hidden');
-                document.querySelectorAll('.tutorial-active-element').forEach(el => {
-                    el.classList.remove('tutorial-active-element');
-                });
+                document.querySelectorAll('.tutorial-active-element').forEach(el => el.classList.remove('tutorial-active-element'));
             }, 500);
         }
 
+        // --- MAP & EDIT LOGIK ---
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const btn = document.getElementById('edit-btn');
+            const hint = document.getElementById('edit-hint');
+            
+            if (isEditMode) {
+                btn.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-500');
+                btn.classList.remove('bg-white', 'text-stone-500', 'border-stone-300');
+                hint.classList.remove('hidden');
+                document.getElementById('map').classList.add('cursor-crosshair');
+                
+                // Stationen draggable
+                markers.forEach(m => {
+                    m.dragging.enable();
+                    m._icon.classList.add('cursor-move');
+                });
+                renderWaypointMarkers();
+            } else {
+                btn.classList.remove('bg-amber-100', 'text-amber-800', 'border-amber-500');
+                btn.classList.add('bg-white', 'text-stone-500', 'border-stone-300');
+                hint.classList.add('hidden');
+                document.getElementById('map').classList.remove('cursor-crosshair');
 
-        // --- TIMELINE INITIALISIERUNG ---
+                markers.forEach(m => {
+                    m.dragging.disable();
+                    m._icon.classList.remove('cursor-move');
+                });
+                clearWaypointMarkers();
+            }
+        }
+
+        function renderWaypointMarkers() {
+            clearWaypointMarkers();
+            stations.forEach((station, sIdx) => {
+                if(station.waypoints) {
+                    station.waypoints.forEach((wp, wIdx) => {
+                        const icon = L.divIcon({ className: 'waypoint-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
+                        const marker = L.marker(wp, { icon: icon, draggable: true }).addTo(map);
+                        
+                        marker.on('drag', (e) => {
+                            const newPos = e.target.getLatLng();
+                            station.waypoints[wIdx] = [newPos.lat, newPos.lng];
+                            updatePolyline();
+                        });
+                        
+                        // Right click to remove waypoint? Maybe too complex for now.
+                        waypointMarkers.push(marker);
+                    });
+                }
+            });
+        }
+
+        function clearWaypointMarkers() {
+            waypointMarkers.forEach(m => map.removeLayer(m));
+            waypointMarkers = [];
+        }
+
+        function updatePolyline() {
+            // Flatten all coordinates: Station -> Waypoints -> Next Station
+            const fullPath = [];
+            stations.forEach((s) => {
+                fullPath.push(s.coords);
+                if (s.waypoints) {
+                    s.waypoints.forEach(wp => fullPath.push(wp));
+                }
+            });
+            polyline.setLatLngs(fullPath);
+        }
+
+        // Neue Funktion: Waypoint hinzufügen bei Klick auf Polyline
+        function addWaypointAtClick(latlng) {
+            if(!isEditMode) return;
+            
+            // Einfacher Algorithmus: Finde das nächste Segment
+            // Wir iterieren durch Stationen und deren Waypoints und finden den Punkt, 
+            // der dem Klick am nächsten ist, um einzufügen.
+            // Vereinfachung: Wir fügen es einfach der Station hinzu, die am nächsten "davor" liegt.
+            
+            let bestStationIdx = -1;
+            let bestInsertIdx = -1; // 0 = start, 1+ = after waypoint index
+            let minDistance = Infinity;
+
+            // Wir prüfen Distanzen zu den Liniensegmenten
+            // Das ist komplex in reinem JS. 
+            // Workaround für Vibe Coding: Wir fügen den Punkt einfach am Ende der Waypoints 
+            // der Station hinzu, die dem Klick am nächsten ist (aber davor in der Reihenfolge).
+            
+            // Bessere Vibe-Lösung: Finde die Station, deren Index < currentIndex (oder wir nutzen globale Distanz).
+            // Wir nehmen an, der Nutzer klickt zwischen Station A und B.
+            
+            let closestStation = stations[0];
+            let closestDist = map.distance(latlng, stations[0].coords);
+            let closestIdx = 0;
+
+            stations.forEach((s, idx) => {
+                if (idx === stations.length - 1) return; // Letzte Station hat keine nachfolgende Verbindung
+                const d = map.distance(latlng, s.coords);
+                // Grobe Heuristik: Wir fügen es der Station hinzu, die räumlich am nächsten ist 
+                // UND in der Liste nicht die allerletzte ist.
+                // Um es präzise zu machen, müssten wir lotrechte Abstände messen. 
+                // Für dieses Tool reicht: Füge es der Station hinzu, deren Polyline-Segment geklickt wurde.
+                // Leaflet click event gibt uns das nicht direkt.
+                
+                // Wir nutzen einfach die aktuelle Station (currentIndex) wenn sie Sinn macht, 
+                // sonst die geographisch nächste.
+                
+                // Wir nehmen einfach an, der User klickt grob in die Nähe der Linie von Station X.
+                // Wir fügen den Punkt einfach der Station hinzu, die am nächsten ist.
+                if (d < closestDist) {
+                    closestDist = d;
+                    closestStation = s;
+                    closestIdx = idx;
+                }
+            });
+
+            // Wir fügen den neuen Punkt zu den Waypoints der gefundenen Station hinzu
+            if (!stations[closestIdx].waypoints) stations[closestIdx].waypoints = [];
+            stations[closestIdx].waypoints.push([latlng.lat, latlng.lng]);
+            
+            // Refresh
+            updatePolyline();
+            renderWaypointMarkers();
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([20, -10], 3);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            stations.forEach((station, index) => {
+                const marker = L.marker(station.coords, { draggable: false }).addTo(map);
+                const popupContent = `
+                    <div style="font-family: 'Merriweather', serif; padding: 4px;">
+                        <strong style="font-size: 1.1em; display:block; margin-bottom:4px;">${station.location}</strong>
+                        <span style="font-family: 'Inter', sans-serif; color: #666;">${station.title}</span>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                
+                marker.on('click', () => { if (!isEditMode) { currentIndex = index; updateUI(); } });
+                marker.on('drag', function(event) {
+                    const position = event.target.getLatLng();
+                    stations[index].coords = [position.lat, position.lng];
+                    updatePolyline();
+                });
+
+                markers.push(marker);
+            });
+
+            // Init Polyline
+            polyline = L.polyline([], {
+                color: '#78350f', weight: 3, opacity: 0.6, dashArray: '10, 10', className: 'clickable-polyline'
+            }).addTo(map);
+            
+            // Click Event für Polyline (Neue Punkte)
+            polyline.on('click', function(e) {
+                if(isEditMode) {
+                    addWaypointAtClick(e.latlng);
+                }
+            });
+
+            updatePolyline(); // Initial draw with waypoints
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            updateMapState();
+        }
+
+        // --- TIMELINE & UI (Same as before) ---
         function initTimeline() {
             const container = document.getElementById('timeline-container');
-            container.innerHTML = ''; // Reset
-
+            container.innerHTML = ''; 
             stations.forEach((station, index) => {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'flex flex-col items-center gap-1.5 cursor-pointer group relative';
-                wrapper.onclick = () => {
-                    currentIndex = index;
-                    updateUI();
-                };
-
+                wrapper.onclick = () => { currentIndex = index; updateUI(); };
                 const node = document.createElement('div');
                 node.id = `timeline-node-${index}`;
                 node.className = `w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 ${index === 0 ? 'bg-amber-700 border-amber-500 scale-125 timeline-node-active' : 'bg-stone-800 border-stone-500 hover:bg-stone-600'}`;
-
                 const label = document.createElement('span');
                 label.id = `timeline-label-${index}`;
                 label.className = `text-[10px] font-serif font-bold transition-colors duration-300 ${index === 0 ? 'text-amber-500' : 'text-stone-500 group-hover:text-stone-300'}`;
                 label.innerText = station.year;
-                
                 const tooltip = document.createElement('div');
                 tooltip.className = 'absolute bottom-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none';
                 tooltip.innerText = station.location;
-
-                wrapper.appendChild(tooltip);
-                wrapper.appendChild(node);
-                wrapper.appendChild(label);
-                container.appendChild(wrapper);
+                wrapper.appendChild(tooltip); wrapper.appendChild(node); wrapper.appendChild(label); container.appendChild(wrapper);
             });
         }
-
         function updateTimelineState() {
             stations.forEach((_, index) => {
                 const node = document.getElementById(`timeline-node-${index}`);
                 const label = document.getElementById(`timeline-label-${index}`);
-                
                 if (index === currentIndex) {
                     node.className = 'w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 bg-amber-700 border-amber-500 scale-125 timeline-node-active';
                     label.className = 'text-[10px] font-serif font-bold transition-colors duration-300 text-amber-500';
@@ -470,81 +637,30 @@
                 }
             });
         }
-
-        // --- MAP INITIALISIERUNG ---
-        function initMap() {
-            map = L.map('map', { zoomControl: false }).setView(stations[0].coords, 12);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
-            }).addTo(map);
-
-            stations.forEach((station, index) => {
-                const marker = L.marker(station.coords).addTo(map);
-                const popupContent = `
-                    <div style="font-family: 'Merriweather', serif; padding: 4px;">
-                        <strong style="font-size: 1.1em; display:block; margin-bottom:4px;">${station.year}: ${station.location}</strong>
-                        <span style="font-family: 'Inter', sans-serif; color: #666;">${station.title}</span>
-                    </div>
-                `;
-                marker.bindPopup(popupContent);
-                marker.on('click', () => { currentIndex = index; updateUI(); });
-                markers.push(marker);
-            });
-
-            const latlngs = stations.map(s => s.coords);
-            polyline = L.polyline(latlngs, {
-                color: '#78350f', weight: 3, opacity: 0.6, dashArray: '10, 10'
-            }).addTo(map);
-
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-            updateMapState();
-        }
-
-        // --- UI UPDATE LOGIK ---
         function updateUI() {
             const station = stations[currentIndex];
             const hasPrev = currentIndex > 0;
             const hasNext = currentIndex < stations.length - 1;
-
             const elements = ['station-year', 'station-location', 'station-description', 'station-context'];
             elements.forEach(id => {
                 const el = document.getElementById(id);
                 el.style.opacity = '0';
                 el.style.transform = 'translateY(5px)';
             });
-
             setTimeout(() => {
                 document.getElementById('station-count').innerText = currentIndex + 1;
                 document.getElementById('station-year').innerText = station.year;
                 document.getElementById('station-location').innerText = station.location;
                 document.getElementById('station-description').innerText = station.description;
                 document.getElementById('station-context').innerText = station.context;
-
                 const prevBtn = document.getElementById('btn-prev');
                 prevBtn.disabled = !hasPrev;
-                if (!hasPrev) {
-                    prevBtn.classList.add('opacity-30', 'cursor-not-allowed');
-                    prevBtn.classList.remove('hover:bg-stone-200');
-                } else {
-                    prevBtn.classList.remove('opacity-30', 'cursor-not-allowed');
-                    prevBtn.classList.add('hover:bg-stone-200');
-                }
-
+                if (!hasPrev) { prevBtn.classList.add('opacity-30', 'cursor-not-allowed'); prevBtn.classList.remove('hover:bg-stone-200'); } else { prevBtn.classList.remove('opacity-30', 'cursor-not-allowed'); prevBtn.classList.add('hover:bg-stone-200'); }
                 const nextBtn = document.getElementById('btn-next');
                 const nextBtnText = document.getElementById('btn-next-text');
                 nextBtn.disabled = !hasNext;
                 nextBtnText.innerText = hasNext ? 'Weiter' : 'Ende';
-                
-                if (!hasNext) {
-                    nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                    nextBtn.classList.remove('hover:bg-stone-700', 'hover:shadow-lg');
-                } else {
-                    nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    nextBtn.classList.add('hover:bg-stone-700', 'hover:shadow-lg');
-                }
-
+                if (!hasNext) { nextBtn.classList.add('opacity-50', 'cursor-not-allowed'); nextBtn.classList.remove('hover:bg-stone-700', 'hover:shadow-lg'); } else { nextBtn.classList.remove('opacity-50', 'cursor-not-allowed'); nextBtn.classList.add('hover:bg-stone-700', 'hover:shadow-lg'); }
                 elements.forEach(id => {
                     const el = document.getElementById(id);
                     el.style.transition = 'all 0.5s ease-out';
@@ -552,51 +668,24 @@
                     el.style.transform = 'translateY(0)';
                 });
             }, 300);
-
             updateMapState();
             updateTimelineState();
         }
-
         function updateMapState() {
             const station = stations[currentIndex];
-            const zoomLevel = (station.id === 1 || station.id === 5) ? 12 : 6;
+            const zoomLevel = (station.id === 2) ? 4 : (station.id === 1 ? 6 : 8); 
             map.flyTo(station.coords, zoomLevel, { duration: 1.5, easeLinearity: 0.25 });
             markers.forEach((marker, idx) => {
-                if (idx === currentIndex) {
-                    marker.setOpacity(1); marker.setZIndexOffset(1000); setTimeout(() => marker.openPopup(), 500);
-                } else {
-                    marker.setOpacity(0.6); marker.setZIndexOffset(0); marker.closePopup();
-                }
+                if (idx === currentIndex) { marker.setOpacity(1); marker.setZIndexOffset(1000); setTimeout(() => marker.openPopup(), 500); } 
+                else { marker.setOpacity(0.6); marker.setZIndexOffset(0); marker.closePopup(); }
             });
         }
-
         function nextStation() { if (currentIndex < stations.length - 1) { currentIndex++; updateUI(); } }
         function prevStation() { if (currentIndex > 0) { currentIndex--; updateUI(); } }
+        function toggleIntro() { const m = document.getElementById('intro-modal'); if(m.classList.contains('hidden')) { m.classList.remove('hidden'); setTimeout(()=>m.classList.remove('opacity-0'),10);} else { m.classList.add('opacity-0'); setTimeout(()=>m.classList.add('hidden'),300);} }
+        function toggleContext() { const m = document.getElementById('context-modal'); if(m.classList.contains('hidden')) { m.classList.remove('hidden'); setTimeout(()=>m.classList.remove('opacity-0'),10);} else { m.classList.add('opacity-0'); setTimeout(()=>m.classList.add('hidden'),300);} }
 
-        function toggleIntro() {
-            const modal = document.getElementById('intro-modal');
-            if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10);
-            } else {
-                modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-            }
-        }
-
-        function toggleContext() {
-            const modal = document.getElementById('context-modal');
-            if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10);
-            } else {
-                modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-            }
-        }
-
-        // --- START ---
-        window.addEventListener('load', () => {
-            initTimeline();
-            initMap();
-            setTimeout(() => map.invalidateSize(), 100);
-        });
+        window.addEventListener('load', () => { initTimeline(); initMap(); setTimeout(() => map.invalidateSize(), 100); });
     </script>
 </body>
 </html>
